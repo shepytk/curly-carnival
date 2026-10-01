@@ -87,8 +87,8 @@ def main() -> int:
     try:
         changed = git("diff", "--name-only", "-z", args.base, "--").decode("utf-8").split("\0")
         untracked = git("ls-files", "--others", "--exclude-standard", "-z").decode("utf-8").split("\0")
-        status = git("status", "--short").decode("utf-8", errors="replace").strip() or "(clean)"
-        status = "; ".join(line.strip() for line in status.splitlines())
+        status_lines = git("status", "--short").decode("utf-8", errors="replace").splitlines()
+        status = f"{len(status_lines)} changed entries" if status_lines else "(clean)"
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         detail = getattr(exc, "stderr", b"")
         print(f"Unable to read Git context: {detail.decode('utf-8', errors='replace')}", file=sys.stderr)
