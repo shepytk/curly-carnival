@@ -16,6 +16,9 @@ flowchart TB
   API[FastAPI HTTP adapter] --> APP
   DB[PostgreSQL adapter] --> PORTS
   ASSETS[Object storage adapter] --> PORTS
+  PORTS --> OUTBOX[Transactional event outbox]
+  OUTBOX --> EXPORTER[Async event exporter]
+  EXPORTER --> ANALYTICS[Analytics store / curated learning data]
 ```
 
 Arrows represent dependency direction: outer components depend on inner contracts. The domain has no dependency on frameworks, rendering engines, databases, HTTP, or AI providers.
@@ -106,9 +109,13 @@ export interface AssetStore {
   createUploadTarget(input: AssetUploadRequest): Promise<UploadTarget>;
   resolve(assetId: AssetId): Promise<AssetReference | null>;
 }
+
+export interface UsageEventRecorder {
+  record(event: UsageEvent): Promise<void>;
+}
 ```
 
-Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(snapshot, viewport)` and a stream of semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
+Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `UsageEventRecorder`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(snapshot, viewport)` and a stream of semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
 
 ### Dependency rules
 
@@ -226,7 +233,58 @@ Add linting, TypeScript strict mode, Python type checks, formatting, dependency-
 - Add structured logs, request IDs, error reporting, and basic metrics before multi-company rollout.
 - Treat AI output, imported project files, and third-party catalogue metadata as untrusted input.
 
-## 11. Delivery phases
+## 11. Product analytics and data learning
+
+The existing application boundary can support product analytics, but analytics should be an explicit adapter rather than a reason to put telemetry in UI or rendering code. The application use case knows when a meaningful, validated action succeeds; the renderer knows about high-volume interactions such as pointer movement and camera frames. Only the former should produce product usage events by default.
+
+### Keep four data purposes separate
+
+- **Operational telemetry:** service health, latency, failures, and resource use. Do not put design contents or raw prompts in ordinary logs.
+- **Product analytics:** aggregate feature usage and funnel outcomes, such as project created, product placed, design saved, export completed, and design-assistant proposal accepted, edited, dismissed, or undone.
+- **Audit history:** attributable company actions needed for project collaboration or accountability. Apply its own access and retention rules.
+- **AI learning data:** a curated, purpose-eligible set of examples for evaluation or model improvement. Product analytics events are not automatically training data.
+
+These purposes need separate schemas, access controls, retention, and deletion behavior. Do not treat domain events, analytics events, audit records, and debug logs as interchangeable. Do not store complete room snapshots in analytics by default.
+
+### Event flow
+
+1. A successful application use case records a small, versioned semantic `UsageEvent`; rejected validation attempts are only recorded if there is a specific analytics question and a privacy-reviewed need.
+2. An `AnalyticsConsentPolicy` or equivalent purpose-eligibility check determines whether collection is allowed for that actor, workspace, event, and use. Honor workspace policy and applicable user choices.
+3. `UsageEventRecorder` writes an event to a transactional outbox with the project change, so a saved action and its event cannot silently diverge.
+4. A background exporter batches outbox records to a separate analytics store. It retries safely using `eventId` for deduplication and marks delivery progress without blocking the editor request.
+5. Analytics queries and any later learning-data preparation run against the separate store, not the production project database.
+
+Start with a PostgreSQL outbox and a scheduled/batched exporter. Keep the exporter behind an adapter so a queue or warehouse can be added when event volume or reporting needs justify it. Do not add Kafka, a lakehouse, or a second microservice to the initial release without measured need.
+
+### Event contract
+
+Use a small allowlisted event catalogue and a versioned envelope. A useful envelope includes:
+
+- `eventId`, `eventName`, `schemaVersion`, and `occurredAt`.
+- Pseudonymous actor/session reference and workspace/project IDs only where required and permitted.
+- Project revision, application version, and stable product/catalogue version IDs where needed to interpret the event later.
+- A minimal event-specific payload, such as action outcome or coarse duration bucket.
+- Purpose/eligibility metadata needed to enforce retention, deletion, and learning-data rules.
+
+Record completed semantic actions such as `ProjectCreated`, `ProductPlaced`, `DesignSaved`, `MaterialAssigned`, and `DesignAssistantProposalAccepted`. For the in-app assistant, useful outcome events include accepted, edited, dismissed, and later undone, linked by proposal ID and design revision. Avoid hover, pointer-move, camera-frame, and every-keystroke events; they create cost and noise without reliable intent. Do not collect raw prompts, customer names, addresses, images, or full room geometry by default. If a later feature needs richer examples, define the data purpose, user notice/choice, access, retention, and deletion path before collecting them.
+
+Keep event names stable and evolve schemas additively where practical. Consumers must tolerate unknown fields and event versions. Store catalogue version references rather than mutable product labels so historic events remain interpretable.
+
+### Analytics and AI learning boundary
+
+The analytics store may support aggregate dashboards and cohort analysis. If model evaluation or training is later justified, a separate preparation job should select only purpose-eligible records, remove or transform identifying details, attach source/schema/model provenance, and retain links needed to honor deletion requests. Keep the production design database as the system of record; do not train or fine-tune directly from arbitrary tenant projects or chat transcripts.
+
+An eventual `AnalyticsReadModel` or reporting API should have separate authorization and query limits from project editing APIs. Company dashboards must enforce tenant boundaries and minimum cohort sizes where small groups could expose an individual’s activity. Start with internal aggregate reports before adding customer-facing analytics.
+
+### Tests and readiness
+
+- Verify meaningful events are emitted only after successful commands, not from the render loop.
+- Verify consent/purpose ineligibility suppresses collection and event payloads reject prohibited fields.
+- Verify outbox retries are idempotent, schema versions are accepted, and delivery failures do not fail an already committed design edit.
+- Verify workspace/user deletion and retention policies reach the analytics and learning-data stores.
+- Track event-schema compatibility and consent/eligibility decisions as part of release review.
+
+## 12. Delivery phases
 
 ### Phase 0 — Product and geometry decisions
 
@@ -242,7 +300,7 @@ Project the same snapshot into Three.js, add catalogue asset loading, camera con
 
 ### Phase 3 — API and persistent projects
 
-Add FastAPI, PostgreSQL, authentication/authorization integration, revision-safe saves, catalogue endpoints, and asset storage adapter.
+Add FastAPI, PostgreSQL, authentication/authorization integration, revision-safe saves, catalogue endpoints, asset storage adapter, and a minimal versioned usage-event catalogue/outbox with privacy defaults before collecting production usage.
 
 ### Phase 4 — Professional workflows
 
@@ -252,7 +310,7 @@ Add company workspaces, customer projects, product variants/pricing, quotation/e
 
 Add AI as a planner that proposes typed commands against a bounded design snapshot. Reuse validation, authorization, history, and rendering paths already built for human edits.
 
-## 12. Architecture decision records
+## 13. Architecture decision records
 
 Create short ADRs in `docs/adr/` for changes that affect boundaries or migration cost. Initial candidates:
 
@@ -261,3 +319,4 @@ Create short ADRs in `docs/adr/` for changes that affect boundaries or migration
 - ADR 0003: Konva and Three.js adapter contracts.
 - ADR 0004: versioned design document and optimistic concurrency.
 - ADR 0005: AI suggestions expressed as validated commands.
+- ADR 0006: usage-event purposes, eligibility, outbox delivery, and analytics retention.
