@@ -56,7 +56,7 @@ packages/
   design-serialization/ Versioned project import/export
 docs/
   ARCHITECTURE.md
-  AI_WORKFLOW.md
+  IN_APP_DESIGN_ASSISTANT_WORKFLOW.md
   adr/                 Architecture decision records
 ```
 
