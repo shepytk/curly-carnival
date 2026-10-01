@@ -4,7 +4,7 @@ A web based room and bathroom planner for homeowners and renovation professional
 
 ## Project status
 
-This repository currently contains the product, architecture, and development-agent plans. The implementation has not started. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, rendering guidance, and delivery phases. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
+This repository currently contains the product, architecture, implementation roadmap, and development-agent plans. The implementation has not started. See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for the recommended build sequence and milestone gates. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, and rendering guidance. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
 
 ## Product goals
 
