@@ -1,6 +1,6 @@
 # Milestone 0: product and domain contract
 
-This document records the initial pilot assumptions and the boundary that implementation will build against. It is deliberately narrow: it defines a reviewable bathroom plan, not a general CAD format.
+This document records the initial bathroom-pilot assumptions and the narrow v1 workflow contract that implementation will build against. The platform architecture treats renovation projects and spaces as reusable concepts; this contract deliberately limits the first workflow to a reviewable bathroom plan and is not a general CAD format.
 
 ## Pilot user and journey
 
