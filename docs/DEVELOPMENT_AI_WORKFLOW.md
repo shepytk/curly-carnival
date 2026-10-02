@@ -64,7 +64,7 @@ These scripts use only the Python standard library and do not call a model or ne
 python3 scripts/ai/context_bundle.py
 
 # Build context around one or more explicit target files.
-python3 scripts/ai/context_bundle.py --focus packages/domain/room.py --include docs/ARCHITECTURE.md
+python3 scripts/ai/context_bundle.py --focus apps/api/app/domain/room.py --include docs/ARCHITECTURE.md
 
 # Validate local Markdown links and repository skill manifests.
 python3 scripts/ai/validate_repo.py

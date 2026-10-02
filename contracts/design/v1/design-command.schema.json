@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curly-carnival.github.io/contracts/design/v1/design-command.schema.json",
+  "title": "Room Design Command v1",
+  "oneOf": [
+    { "$ref": "#/$defs/createDesign" },
+    { "$ref": "#/$defs/setRoom" },
+    { "$ref": "#/$defs/upsertOpening" },
+    { "$ref": "#/$defs/removeOpening" },
+    { "$ref": "#/$defs/placeProduct" },
+    { "$ref": "#/$defs/moveProduct" },
+    { "$ref": "#/$defs/rotateProduct" },
+    { "$ref": "#/$defs/removeProduct" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["commandVersion", "commandId", "designId", "expectedRevision", "type", "payload"],
+      "properties": {
+        "commandVersion": { "const": 1 },
+        "commandId": { "$ref": "design-snapshot.schema.json#/$defs/id" },
+        "designId": { "$ref": "design-snapshot.schema.json#/$defs/id" },
+        "expectedRevision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "createDesign": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "create-design" },
+            "payload": { "$ref": "design-snapshot.schema.json#/$defs/room" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "setRoom": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "set-room" },
+            "payload": { "$ref": "design-snapshot.schema.json#/$defs/room" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "upsertOpening": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "upsert-opening" },
+            "payload": { "$ref": "design-snapshot.schema.json#/$defs/opening" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "removeOpening": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "remove-opening" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["openingId"],
+              "properties": { "openingId": { "$ref": "design-snapshot.schema.json#/$defs/id" } }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "placeProduct": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "place-product" },
+            "payload": { "$ref": "design-snapshot.schema.json#/$defs/placement" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "moveProduct": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "move-product" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["placementId", "xMm", "yMm"],
+              "properties": {
+                "placementId": { "$ref": "design-snapshot.schema.json#/$defs/id" },
+                "xMm": { "type": "integer" },
+                "yMm": { "type": "integer" }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "rotateProduct": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "rotate-product" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["placementId", "rotationDeg"],
+              "properties": {
+                "placementId": { "$ref": "design-snapshot.schema.json#/$defs/id" },
+                "rotationDeg": { "enum": [0, 90, 180, 270] }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "removeProduct": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "remove-product" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["placementId"],
+              "properties": { "placementId": { "$ref": "design-snapshot.schema.json#/$defs/id" } }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

@@ -8,20 +8,21 @@ The design follows a **ports and adapters / clean architecture** structure:
 
 ```mermaid
 flowchart TB
-  UI[React UI and editor tools] --> APP[Application use cases]
-  R2D[2D renderer adapter] --> APP
-  R3D[3D renderer adapter] --> APP
-  APP --> DOMAIN[Domain model and policies]
-  APP --> PORTS[Ports / interfaces]
-  API[FastAPI HTTP adapter] --> APP
+  UI[React and TypeScript editor] --> EDITOR[Editor session and preview checks]
+  R2D[2D renderer adapter] --> EDITOR
+  R3D[3D renderer adapter] --> EDITOR
+  EDITOR --> API[FastAPI HTTP boundary]
+  API --> APP[Python application use cases]
+  APP --> DOMAIN[Python domain rules]
+  APP --> PORTS[Python ports]
   DB[PostgreSQL adapter] --> PORTS
   ASSETS[Object storage adapter] --> PORTS
-  PORTS --> OUTBOX[Transactional event outbox]
-  OUTBOX --> EXPORTER[Async event exporter]
-  EXPORTER --> ANALYTICS[Analytics store / curated learning data]
+  OUTBOX[Transactional outbox adapter] --> PORTS
+  OUTBOX --> WORKER[Python analytics and AI workers]
+  WORKER --> STORE[Analytics store]
 ```
 
-Arrows represent dependency direction: outer components depend on inner contracts. The domain has no dependency on frameworks, rendering engines, databases, HTTP, or AI providers.
+Command/data flow runs from the browser to the API and application; adapters point to the ports they implement. The browser may mirror geometry checks for fast feedback; FastAPI and the Python domain are authoritative for committed commands. Shared contracts and test vectors keep the browser and API consistent. The Python domain has no dependency on FastAPI, SQLAlchemy, rendering engines, HTTP, or AI providers.
 
 ## 2. Technology baseline
 
@@ -30,9 +31,10 @@ Arrows represent dependency direction: outer components depend on inner contract
 | Web UI | React + TypeScript + Vite | Presentation only |
 | 2D editor | Konva.js | `PlanRenderer` adapter |
 | 3D preview | Three.js + React Three Fiber | `SceneRenderer` adapter |
-| API | FastAPI + Pydantic | HTTP adapter and DTO validation |
-| Database | PostgreSQL + SQLAlchemy + Alembic | Persistence adapter |
+| API | FastAPI + Pydantic | Python HTTP adapter, request validation, and OpenAPI contract |
+| Database | PostgreSQL + SQLAlchemy + Alembic | Persistence adapter and versioned migrations |
 | File assets | S3-compatible object storage | `AssetStore` adapter |
+| Analytics and AI jobs | Python | Offline/event-driven analytics, evaluation, and AI/data-science integrations; outside the interactive design command path |
 | Web tests | Vitest, React Testing Library, Playwright | Unit, component, and end-to-end checks |
 | API tests | pytest | Domain, use-case, contract, and integration checks |
 
@@ -40,13 +42,15 @@ This is a modular monolith initially. Keep clear internal module boundaries; spl
 
 ## 3. Layer responsibilities
 
-### Domain (`packages/domain` and API-side domain package)
+### Domain (Python API domain and TypeScript editor feedback)
+
+The Python API domain (`apps/api/app/domain`) is authoritative for committed design changes. It has no FastAPI, SQLAlchemy, rendering, HTTP, or AI-provider dependency. The TypeScript editor may implement pure geometry checks for immediate feedback, but the API must revalidate every committed change. These implementations stay aligned through the versioned contract and shared deterministic test vectors; the code is not shared across runtimes.
 
 Owns the product concepts and invariants:
 
 - `Project`, `Room`, `Wall`, `Opening`, `PlacedProduct`, `MaterialAssignment`.
 - Value objects such as `LengthMm`, `PointMm`, `Rotation`, `RoomId`, and `ProductId`.
-- Rules such as valid dimensions, non-overlapping openings on a wall, fixture clearance checks, and valid attachment to a wall/floor.
+- Rules such as valid dimensions, non-overlapping openings, placement bounds, and valid attachment to a wall/floor. Fixture clearance/access guidance is computed separately as warnings.
 - Domain policies for geometry validation and product fit.
 - Domain events such as `ProductPlaced` or `RoomDimensionsChanged` where they provide useful integration seams.
 
@@ -54,9 +58,9 @@ Represent authoritative dimensions as integer millimetres. Convert to metres onl
 
 Domain objects should be small and cohesive. Avoid a generic `RoomManager` or `DesignService` that accumulates unrelated rules. Put behavior next to the entity/value object that owns the invariant, or in a named domain policy when the rule spans multiple entities.
 
-### Application (`packages/application`)
+### Application (`apps/api/app/application` and `apps/web` editor application)
 
-Coordinates one user goal at a time. Use cases own the workflow, transaction boundary, authorization check, and port calls. Examples:
+The Python API application layer coordinates committed user goals. Its use cases own the transaction boundary, authorization check, and port calls. Examples:
 
 - `CreateProject`
 - `UpdateRoomDimensions`
@@ -68,7 +72,7 @@ Coordinates one user goal at a time. Use cases own the workflow, transaction bou
 - `LoadProject` / `SaveProject`
 - `ExportDesignSnapshot`
 
-Each command is validated before mutation. A use case returns a typed result with either a new immutable design snapshot and emitted events, or structured validation errors. Use cases do not import UI or rendering packages.
+Each server command is validated before mutation. A use case returns a typed result with either a new immutable design snapshot and emitted events, or structured validation errors. These use cases do not import UI or rendering packages. The TypeScript editor application coordinates transient interaction state and translates gestures into versioned commands; it is not a second persistence or authorization boundary.
 
 ### Presentation (`apps/web`)
 
@@ -76,17 +80,21 @@ Owns route/page composition, panels, toolbars, dialogs, accessibility, and input
 
 The front end maintains transient interaction state separately from saved design state: current tool, hover target, selection, camera position, open panels, and drag preview. Only committed design changes become application commands.
 
-### Rendering adapters (`renderer-2d`, `renderer-3d`)
+### Rendering adapters (`apps/web/src/adapters/renderer-2d`, `renderer-3d`)
 
 Convert an immutable `DesignSnapshot` plus transient viewport state into pixels. They do not create canonical product records, write to persistence, or apply design mutations directly. Pointer/keyboard gestures are translated into semantic intents (select, request move, request resize) that the application validates.
 
 ### API and infrastructure (`apps/api`, `adapters`)
 
-FastAPI routers translate HTTP requests into application commands and application results into response DTOs. SQLAlchemy models and repository implementations live in infrastructure; map between persistence records and domain data explicitly. Object storage handles binary assets only; metadata and access rules remain in the application/domain and database.
+FastAPI routers translate HTTP requests into application commands and application results into response DTOs. The existing OpenAPI setup is the HTTP contract for the TypeScript client; keep Pydantic request/response models aligned with it and use the repository's established type-generation workflow. Python domain validation is authoritative before persistence. SQLAlchemy models and repository implementations live in infrastructure; map between persistence records and domain data explicitly. Object storage handles binary assets only; metadata and access rules remain in the application/domain and database.
+
+### Python analytics and AI workers (`apps/workers`)
+
+Python is the API language and also serves workloads that benefit from its data and AI ecosystem: event export/aggregation, offline analysis, model evaluation, and later approved learning-data preparation. Workers consume versioned outbox events or curated analytics records. AI workers cannot mutate a design directly: proposed changes return as typed commands to the FastAPI API, which applies normal authorization and authoritative domain validation. Keep worker inputs/outputs versioned and language-neutral (JSON Schema/OpenAPI-compatible contracts).
 
 ## 4. Interfaces and dependency boundaries
 
-Define behavior as small interfaces at the point of use. Use TypeScript interfaces for web/application ports and Python `Protocol` or abstract base classes for API-side ports. Keep interfaces capability-based; do not make every class implement one broad `IService`.
+Define behavior as small interfaces at the point of use. Use TypeScript interfaces for browser/application-facing ports and Python `Protocol` or abstract base classes for API and worker ports. Define each port in the language and application layer that consumes it. Keep interfaces capability-based; do not make every class implement one broad `IService`.
 
 ### Example application ports
 
@@ -115,7 +123,17 @@ export interface UsageEventRecorder {
 }
 ```
 
-Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `UsageEventRecorder`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(snapshot, viewport)` and a stream of semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
+The API defines equivalent ports in Python so infrastructure dependencies remain injectable and testable at that boundary:
+
+```py
+from typing import Protocol
+
+class ProjectRepository(Protocol):
+    async def get(self, project_id: str, actor_id: str) -> "DesignSnapshot | None": ...
+    async def save(self, snapshot: "DesignSnapshot", expected_revision: int) -> "SaveResult": ...
+```
+
+Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `UsageEventRecorder`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(snapshot, viewport)` and semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
 
 ### Dependency rules
 
@@ -124,7 +142,8 @@ Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `Us
 3. UI and renderer adapters depend on application/domain contracts, never the reverse.
 4. Infrastructure implements application ports.
 5. Composition roots (`apps/web` bootstrap and FastAPI startup) choose concrete adapters and wire dependencies.
-6. No module reaches into another module's private implementation; expose public contracts through its index/package API.
+6. Python workers depend on analytics/AI contracts only; the interactive domain does not depend on worker code.
+7. No module reaches into another module's private implementation; expose public contracts through its index/package API.
 
 ## 5. Front-end component and state split
 
@@ -221,7 +240,7 @@ SOLID is a design aid, not a requirement to create an interface for every class.
 | End-to-end | Main user journey | create room, place fixture, save, reopen, export |
 | Rendering | Stable projection and lifecycle behavior | basic bounds, cleanup, important screenshot baselines |
 
-Add linting, TypeScript strict mode, Python type checks, formatting, dependency-boundary checks, and CI on each pull request. Avoid testing implementation details when behavior can be tested through public contracts.
+Add linting, TypeScript strict mode, Python type checks, formatting, dependency-boundary checks, and CI on each pull request. Run the same versioned geometry test vectors against the TypeScript editor checks and Python authoritative domain; FastAPI tests verify the HTTP boundary and persistence behavior. Python workers get independent contract, data-quality, retry/idempotency, and deterministic transformation tests. Avoid testing implementation details when behavior can be tested through public contracts.
 
 ## 10. Security and operational concerns
 
@@ -288,7 +307,7 @@ An eventual `AnalyticsReadModel` or reporting API should have separate authoriza
 
 ### Phase 0 — Product and geometry decisions
 
-Define supported room shapes, coordinate conventions, first user journey, persistence rules, and fixture placement semantics. Record key choices as ADRs.
+Define supported room shapes, coordinate conventions, first user journey, persistence rules, and fixture placement semantics. Record key choices as ADRs. The API/domain language split and versioned design contract are recorded in [ADR 0007](adr/0007-fastapi-python-api-typescript-editor.md) and [the Milestone 0 contract](MILESTONE_0_DOMAIN_CONTRACT.md).
 
 ### Phase 1 — Domain and 2D vertical slice
 
@@ -300,7 +319,7 @@ Project the same snapshot into Three.js, add catalogue asset loading, camera con
 
 ### Phase 3 — API and persistent projects
 
-Add FastAPI, PostgreSQL, authentication/authorization integration, revision-safe saves, catalogue endpoints, asset storage adapter, and a minimal versioned usage-event catalogue/outbox with privacy defaults before collecting production usage.
+Add FastAPI, PostgreSQL, authentication/authorization integration, revision-safe saves, catalogue endpoints, asset storage adapter, and a minimal versioned usage-event catalogue/outbox with privacy defaults before collecting production usage. Python workers consume the event contract outside the project command path.
 
 ### Phase 4 — Professional workflows
 
@@ -320,3 +339,4 @@ Create short ADRs in `docs/adr/` for changes that affect boundaries or migration
 - ADR 0004: versioned design document and optimistic concurrency.
 - ADR 0005: AI suggestions expressed as validated commands.
 - ADR 0006: usage-event purposes, eligibility, outbox delivery, and analytics retention.
+- ADR 0007: FastAPI/Python API with a TypeScript editor and cross-language geometry contract.

@@ -1,0 +1,82 @@
+{
+  "contractVersion": 1,
+  "vectors": [
+    {
+      "id": "G-001",
+      "description": "Vanity fits within room",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "placements": [{ "xMm": 100, "yMm": 100, "widthMm": 1000, "depthMm": 500, "rotationDeg": 0 }],
+      "expected": { "valid": true }
+    },
+    {
+      "id": "G-002",
+      "description": "Quarter turn swaps rectangular footprint extents",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "placements": [{ "xMm": 100, "yMm": 100, "widthMm": 1200, "depthMm": 500, "rotationDeg": 90 }],
+      "expected": { "valid": true, "effectiveWidthMm": 500, "effectiveDepthMm": 1200 }
+    },
+    {
+      "id": "G-003",
+      "description": "Placement extends past east room boundary",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "placements": [{ "xMm": 1500, "yMm": 100, "widthMm": 1000, "depthMm": 500, "rotationDeg": 0 }],
+      "expected": { "valid": false, "errorCode": "PLACEMENT_OUT_OF_BOUNDS" }
+    },
+    {
+      "id": "G-004",
+      "description": "Two solid footprints overlap",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "placements": [
+        { "xMm": 100, "yMm": 100, "widthMm": 1000, "depthMm": 500, "rotationDeg": 0 },
+        { "xMm": 900, "yMm": 100, "widthMm": 1000, "depthMm": 500, "rotationDeg": 0 }
+      ],
+      "expected": { "valid": false, "errorCode": "PLACEMENTS_OVERLAP" }
+    },
+    {
+      "id": "G-005",
+      "description": "Two south wall openings fit without overlap",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "openings": [
+        { "wall": "south", "offsetMm": 100, "widthMm": 900 },
+        { "wall": "south", "offsetMm": 1200, "widthMm": 800 }
+      ],
+      "expected": { "valid": true }
+    },
+    {
+      "id": "G-006",
+      "description": "Opening extends past south wall end",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "openings": [{ "wall": "south", "offsetMm": 1800, "widthMm": 900 }],
+      "expected": { "valid": false, "errorCode": "OPENING_OUT_OF_BOUNDS" }
+    },
+    {
+      "id": "G-007",
+      "description": "Two openings on the same wall overlap",
+      "room": { "widthMm": 2400, "depthMm": 3000 },
+      "openings": [
+        { "wall": "south", "offsetMm": 100, "widthMm": 900 },
+        { "wall": "south", "offsetMm": 800, "widthMm": 600 }
+      ],
+      "expected": { "valid": false, "errorCode": "OPENINGS_OVERLAP" }
+    },
+    {
+      "id": "G-008",
+      "description": "Fractional millimetre dimension is invalid",
+      "room": { "widthMm": 2400.5, "depthMm": 3000 },
+      "expected": { "valid": false, "errorCode": "DIMENSION_MUST_BE_INTEGER_MM" }
+    },
+    {
+      "id": "G-009",
+      "description": "Unsupported snapshot contract version is rejected",
+      "snapshotSchemaVersion": 2,
+      "expected": { "valid": false, "errorCode": "UNSUPPORTED_SCHEMA_VERSION" }
+    },
+    {
+      "id": "G-010",
+      "description": "Window vertical extent exceeds wall height",
+      "room": { "widthMm": 2400, "depthMm": 3000, "wallHeightMm": 2400 },
+      "openings": [{ "kind": "window", "wall": "south", "offsetMm": 400, "widthMm": 700, "sillHeightMm": 1700, "heightMm": 800 }],
+      "expected": { "valid": false, "errorCode": "OPENING_OUT_OF_BOUNDS" }
+    }
+  ]
+}

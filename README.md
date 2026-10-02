@@ -21,8 +21,9 @@ This repository currently contains the product, architecture, implementation roa
 | Web application | React, TypeScript, Vite |
 | 2D plan editor | Konva.js (wrapped behind an application-owned interface) |
 | 3D preview | Three.js through React Three Fiber |
-| API | Python, FastAPI, Pydantic |
+| API and authoritative validation | Python, FastAPI, Pydantic |
 | Persistence | PostgreSQL, SQLAlchemy and Alembic |
+| Analytics and AI jobs | Python for event processing, analytics, evaluation, and data-science integrations |
 | Asset storage | S3-compatible object storage |
 | Testing | Vitest/React Testing Library, pytest, Playwright |
 
@@ -45,20 +46,20 @@ Company accounts, quotations, a broad manufacturer catalogue, realistic lighting
 
 ```text
 apps/
-  web/                 React application and UI composition
-  api/                 FastAPI composition root and HTTP endpoints
-packages/
-  domain/              Design entities, value objects, invariants
-  application/         Use cases, commands, ports, validation results
-  editor-contracts/    Shared API/editor schemas and generated types
-  renderer-2d/         Konva adapter
-  renderer-3d/         Three.js / React Three Fiber adapter
-  design-serialization/ Versioned project import/export
+  web/
+    src/editor/         TypeScript editor session, preview checks, and renderer adapters
+  api/
+    app/domain/         Python authoritative design model and geometry rules
+    app/application/    FastAPI use cases and ports
+    app/adapters/       SQLAlchemy, object storage, and external adapters
+  workers/              Python event analytics and AI/data-science jobs
 docs/
   ARCHITECTURE.md
   IN_APP_DESIGN_ASSISTANT_WORKFLOW.md
   DEVELOPMENT_AI_WORKFLOW.md
   adr/                 Architecture decision records
+contracts/
+  design/v1/            Snapshot/command schemas and shared geometry test vectors
 AGENTS.md              Repository-wide coding-agent instructions
 .codex/skills/         Task-specific, reusable agent skills
 scripts/ai/            Deterministic context and validation helpers
@@ -76,6 +77,7 @@ The exact workspace tooling (for example pnpm workspaces) is to be selected when
 - API DTOs and database records are translated at adapter boundaries; they are not domain entities.
 - Persist project format versions and provide explicit migrations for older saved designs.
 - All geometry changes go through validated commands and produce undoable results.
+- The Python API domain is authoritative for committed geometry; TypeScript editor checks provide responsive feedback. Shared versioned test vectors keep both implementations aligned, and the API revalidates every mutation.
 
 ## Local development
 

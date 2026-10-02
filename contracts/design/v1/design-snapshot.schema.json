@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curly-carnival.github.io/contracts/design/v1/design-snapshot.schema.json",
+  "title": "Room Design Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "designId", "revision", "units", "room", "placements"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "designId": { "$ref": "#/$defs/id" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "units": { "const": "mm" },
+    "room": { "$ref": "#/$defs/room" },
+    "placements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/placement" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "positiveMm": { "type": "integer", "minimum": 1 },
+    "nonNegativeMm": { "type": "integer", "minimum": 0 },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape", "widthMm", "depthMm", "wallHeightMm", "openings"],
+      "properties": {
+        "shape": { "const": "rectangle" },
+        "widthMm": { "$ref": "#/$defs/positiveMm" },
+        "depthMm": { "$ref": "#/$defs/positiveMm" },
+        "wallHeightMm": { "$ref": "#/$defs/positiveMm" },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/opening" }
+        }
+      }
+    },
+    "opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openingId", "kind", "wall", "offsetMm", "widthMm", "heightMm"],
+      "properties": {
+        "openingId": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["door", "window"] },
+        "wall": { "enum": ["south", "east", "north", "west"] },
+        "offsetMm": { "$ref": "#/$defs/nonNegativeMm" },
+        "widthMm": { "$ref": "#/$defs/positiveMm" },
+        "heightMm": { "$ref": "#/$defs/positiveMm" },
+        "sillHeightMm": { "$ref": "#/$defs/nonNegativeMm" },
+        "swing": { "enum": ["inward-left", "inward-right", "none"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "window" } }, "required": ["kind"] },
+          "then": { "required": ["sillHeightMm"], "not": { "required": ["swing"] } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "door" } }, "required": ["kind"] },
+          "then": { "not": { "required": ["sillHeightMm"] } }
+        }
+      ]
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["placementId", "productId", "productVersion", "xMm", "yMm", "widthMm", "depthMm", "rotationDeg"],
+      "properties": {
+        "placementId": { "$ref": "#/$defs/id" },
+        "productId": { "$ref": "#/$defs/id" },
+        "productVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "xMm": { "type": "integer" },
+        "yMm": { "type": "integer" },
+        "widthMm": { "$ref": "#/$defs/positiveMm" },
+        "depthMm": { "$ref": "#/$defs/positiveMm" },
+        "rotationDeg": { "enum": [0, 90, 180, 270] }
+      }
+    }
+  }
+}
