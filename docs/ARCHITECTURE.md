@@ -2,7 +2,7 @@
 
 ## 1. Architectural goals
 
-The system should be easy to extend without turning the room model into a Three.js scene or making the editor UI responsible for business rules. It should support homeowners first and provide a safe foundation for professional catalogues, customer projects, quotations, collaboration, and AI-assisted planning.
+The system should support home renovation planning across multiple rooms and project stages without turning its space model into a Three.js scene or making the editor UI responsible for business rules. It should help homeowners move from measured spaces to design decisions and contractor handoff, with a safe foundation for professional catalogues, estimates, collaboration, and AI-assisted planning. Bathroom planning is the first workflow, not the platform's domain boundary.
 
 The design follows a **ports and adapters / clean architecture** structure:
 
@@ -40,19 +40,28 @@ Command/data flow runs from the browser to the API and application; adapters poi
 
 This is a modular monolith initially. Keep clear internal module boundaries; split services only when operational or team needs justify the extra distributed-system cost.
 
+### Product and workflow boundaries
+
+Treat a renovation project as the container for project decisions and one or more spaces. A space owns reusable geometry such as its boundary, walls, openings, and surfaces. A design places generic items in those spaces and records finish choices; catalogue identity and vendor data remain separate from placement. Do not make `Bathroom`, `Shower`, or another trade-specific concept a required type in the core space model.
+
+Organize bathroom-specific fixture categories, layout guidance, and clearance warnings in the bathroom planning workflow or its domain policies. Other workflows can add their own policies and use the shared project, space, placement, and finish foundations. This is a modular-monolith boundary, not a requirement to build every renovation module now. Keep the current bathroom pilot narrow and evolve the versioned schema through explicit migrations as validated use cases require broader geometry or project structure.
+
 ## 3. Layer responsibilities
 
 ### Domain (Python API domain and TypeScript editor feedback)
 
 The Python API domain (`apps/api/app/domain`) is authoritative for committed design changes. It has no FastAPI, SQLAlchemy, rendering, HTTP, or AI-provider dependency. The TypeScript editor may implement pure geometry checks for immediate feedback, but the API must revalidate every committed change. These implementations stay aligned through the versioned contract and shared deterministic test vectors; the code is not shared across runtimes.
 
-Owns the product concepts and invariants:
+Owns reusable renovation concepts and invariants, with workflow-specific policies kept at their own boundary:
 
-- `Project`, `Room`, `Wall`, `Opening`, `PlacedProduct`, `MaterialAssignment`.
-- Value objects such as `LengthMm`, `PointMm`, `Rotation`, `RoomId`, and `ProductId`.
-- Rules such as valid dimensions, non-overlapping openings, placement bounds, and valid attachment to a wall/floor. Fixture clearance/access guidance is computed separately as warnings.
-- Domain policies for geometry validation and product fit.
-- Domain events such as `ProductPlaced` or `RoomDimensionsChanged` where they provide useful integration seams.
+- Project and space concepts, including space boundaries, walls, openings, and surfaces.
+- Generic design-item placements and finish assignments; an optional product/catalogue reference identifies a particular purchasable item without making catalogue data the design model.
+- Value objects such as `LengthMm`, `PointMm`, `Rotation`, `SpaceId`, and stable project/item IDs.
+- Shared rules such as valid dimensions, non-overlapping openings, placement bounds, and valid attachment to a wall/floor.
+- Workflow policies for domain-specific guidance. For example, bathroom fixture clearance/access guidance is reported separately as warnings and must not be presented as universal code compliance.
+- Domain events such as `DesignItemPlaced` or `SpaceGeometryChanged` where they provide useful integration seams.
+
+The current implementation and v1 contract may use narrower room/fixture terms while the bathroom pilot is built. Keep that pilot scope explicit; migrate names and payloads only through versioned, tested changes when another workflow establishes the need.
 
 Represent authoritative dimensions as integer millimetres. Convert to metres only at the 3D adapter boundary. This avoids floating point drift in editing and persistence. Use explicit coordinate conventions: plan X/Y in millimetres, floor elevation Z in millimetres; renderer maps plan Y to world Z and elevation to world Y.
 
@@ -63,11 +72,11 @@ Domain objects should be small and cohesive. Avoid a generic `RoomManager` or `D
 The Python API application layer coordinates committed user goals. Its use cases own the transaction boundary, authorization check, and port calls. Examples:
 
 - `CreateProject`
-- `UpdateRoomDimensions`
+- `UpdateSpaceGeometry`
 - `AddOpening`
-- `PlaceProduct`
-- `MoveProduct`
-- `AssignMaterial`
+- `PlaceDesignItem`
+- `MoveDesignItem`
+- `AssignFinish`
 - `UndoDesignChange` / `RedoDesignChange`
 - `LoadProject` / `SaveProject`
 - `ExportDesignSnapshot`
@@ -198,14 +207,14 @@ For manipulation, use a preview/commit flow: pointer movement updates only a tra
 
 ### Canonical design snapshot
 
-Persist a versioned document with IDs, integer millimetre dimensions, coordinates, product references, material references, and explicit placements. Store catalogue product metadata separately from project placements. A project references a product/version plus placement transform; it should not embed a mutable vendor product record.
+Persist a versioned renovation project document with IDs, integer millimetre dimensions and coordinates, spaces, design-item placements, and finish references. Store catalogue product metadata separately from project placements. A placed item may reference a product/version plus placement transform; it should not embed a mutable vendor product record. The initial bathroom snapshot can remain one-space and rectangular; versioning and migrations provide a safe path to broader validated room workflows.
 
 Include:
 
 - `schemaVersion`, project ID, revision, timestamps, owner/workspace ID.
-- Room dimensions, wall segments, openings, and level/floor reference.
-- Product placements with stable IDs, anchor/surface, transform, orientation, and optional variant.
-- Material/finish assignments by surface or product.
+- One or more spaces with boundary geometry, wall segments, openings, and level/floor reference.
+- Design-item placements with stable IDs, anchor/surface, transform, orientation, and optional product/version reference.
+- Material/finish assignments by surface or design item.
 - View preferences only where user value justifies saving them.
 
 ### API shape (initial)
@@ -220,8 +229,8 @@ Validate input at three levels: transport schema, application authorization/work
 
 ## 8. SOLID applied in this product
 
-- **Single Responsibility:** room geometry validation, product search, scene projection, and HTTP mapping have distinct owners.
-- **Open/Closed:** new fixture types or render adapters extend typed contracts and registries rather than adding conditionals across the whole editor.
+- **Single Responsibility:** space geometry validation, catalogue search, scene projection, and HTTP mapping have distinct owners.
+- **Open/Closed:** new renovation workflows, design-item categories, or renderer adapters extend typed contracts and registries rather than adding conditionals across the whole editor.
 - **Liskov Substitution:** adapters obey their declared port behavior, including errors, ordering, idempotency, and nullability.
 - **Interface Segregation:** consumers depend on narrow ports such as read-only `ProductCatalog` rather than a broad service with unrelated write operations.
 - **Dependency Inversion:** use cases depend on repository/catalogue interfaces; composition roots provide PostgreSQL, object storage, and rendering implementations.
@@ -307,11 +316,11 @@ An eventual `AnalyticsReadModel` or reporting API should have separate authoriza
 
 ### Phase 0 — Product and geometry decisions
 
-Define supported room shapes, coordinate conventions, first user journey, persistence rules, and fixture placement semantics. Record key choices as ADRs. The API/domain language split and versioned design contract are recorded in [ADR 0007](adr/0007-fastapi-python-api-typescript-editor.md) and [the Milestone 0 contract](MILESTONE_0_DOMAIN_CONTRACT.md).
+Define the first renovation journey, supported space shapes, coordinate conventions, persistence rules, and design-item placement semantics. Keep the bathroom pilot's fixture and clearance assumptions explicit in its versioned workflow contract. Record key choices as ADRs. The API/domain language split and versioned design contract are recorded in [ADR 0007](adr/0007-fastapi-python-api-typescript-editor.md) and [the Milestone 0 contract](MILESTONE_0_DOMAIN_CONTRACT.md).
 
 ### Phase 1 — Domain and 2D vertical slice
 
-Implement project/room model, validation, command results, undoable mutations, room outline, openings, product placement, and a local project repository. Prove the model without 3D.
+Implement the project/space model, validation, command results, undoable mutations, the bathroom pilot's room outline and openings, fixture placement, and a local project repository. Prove the reusable model boundary without 3D.
 
 ### Phase 2 — 3D preview and serialization
 
