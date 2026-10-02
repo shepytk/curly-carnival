@@ -1,6 +1,6 @@
 # Room Design Studio
 
-A web based room and bathroom planner for homeowners and renovation professionals. Users can define a room, arrange fixtures and furniture to scale, compare finishes, and review the design in 2D and 3D. Professional workflows such as product catalogues, customer projects, quotations, and sharing can be added on top of the same design model.
+A browser-based home renovation planning platform for homeowners and renovation professionals. It helps users turn measured spaces and renovation ideas into reviewable plans, compare materials and products, and share decisions with contractors. Bathroom planning is the first workflow, built on a reusable project and space-planning foundation.
 
 ## Project status
 
@@ -8,11 +8,11 @@ Milestone 1 has started. The repository now includes the v1 geometry contract, P
 
 ## Product goals
 
-- Make accurate room planning approachable for homeowners.
-- Give renovation companies a reusable customer-design workflow.
-- Keep room geometry and design data independent of the UI and rendering engine.
+- Help homeowners plan renovation projects from measured spaces through design decisions and contractor handoff.
+- Give renovation professionals a clear, reusable way to review customer plans.
+- Keep project, space geometry, design choices, and product data independent of the UI and rendering engine.
 - Make design actions deterministic, testable, undoable, and suitable for AI-assisted suggestions.
-- Support 2D planning and a 3D preview from one canonical design model.
+- Support multiple renovation workflows on one versioned project and space model; begin with bathroom planning.
 
 ## Initial technology choices
 
@@ -27,9 +27,11 @@ Milestone 1 has started. The repository now includes the v1 geometry contract, P
 | Asset storage | S3-compatible object storage |
 | Testing | Node test runner for TypeScript domain checks, Python `unittest` for geometry, Playwright for browser journeys |
 
-The rendering libraries are adapters, not the source of truth. The design model uses integer millimetres and plain serializable data. The front end can change rendering libraries without changing the domain model or use cases.
+The rendering libraries are adapters, not the source of truth. The renovation project and space model uses integer millimetres and plain serializable data. Bathroom-specific guidance belongs in its workflow policies; additional renovation workflows can reuse the foundation without making bathroom fixtures part of the platform's core model. The front end can change rendering libraries without changing the domain model or use cases.
 
-## Planned first release
+## First pilot release: bathroom planning
+
+The platform is intended to support home renovation across rooms and project stages. This first pilot deliberately proves one workflow end to end before adding other room types.
 
 1. Create a rectangular bathroom and enter its dimensions.
 2. Add doors and windows by entering their wall, dimensions, offset, sill, and swing.
