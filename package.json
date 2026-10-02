@@ -1,0 +1,13 @@
+{
+  "name": "room-design-studio",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "pnpm --dir apps/web dev",
+    "build": "pnpm --dir apps/web build",
+    "test:domain": "node --experimental-strip-types --test apps/web/src/editor/domain/*.test.ts apps/web/src/editor/application/*.test.ts",
+    "test:e2e": "pnpm --dir apps/web exec playwright test --config playwright.config.ts",
+    "test:python": "python3 -m unittest discover -s apps/api/tests -v",
+    "check": "node --experimental-strip-types --test apps/web/src/editor/domain/*.test.ts apps/web/src/editor/application/*.test.ts && python3 -m unittest discover -s apps/api/tests -v"
+  }
+}

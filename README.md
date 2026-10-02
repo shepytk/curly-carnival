@@ -4,7 +4,7 @@ A web based room and bathroom planner for homeowners and renovation professional
 
 ## Project status
 
-This repository currently contains the product, architecture, implementation roadmap, and development-agent plans. The implementation has not started. See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for the recommended build sequence and milestone gates. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, and rendering guidance. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
+Milestone 1 has started. The repository now includes the v1 geometry contract, Python authoritative geometry rules, TypeScript editor checks and command session, and the 2D bathroom editor source. See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for milestone gates and progress. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, and rendering guidance. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
 
 ## Product goals
 
@@ -81,7 +81,26 @@ The exact workspace tooling (for example pnpm workspaces) is to be selected when
 
 ## Local development
 
-The codebase is not scaffolded yet. Once the first implementation phase starts, the web app and API will document their install, run, lint, typecheck, and test commands here. The architecture plan deliberately does not claim runnable commands before those packages exist.
+Install the web dependencies and start Vite:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Run the dependency-free geometry and session tests with Node 24+ and Python 3.12+:
+
+```bash
+pnpm check
+```
+
+Run the Playwright browser journey after dependencies and a browser are installed:
+
+```bash
+pnpm test:e2e
+```
+
+The FastAPI HTTP application and persistent project adapter are planned for Milestone 3; the Python domain validator exists now and remains independent from FastAPI.
 
 ## Contribution workflow
 
