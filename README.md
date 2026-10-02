@@ -1,4 +1,4 @@
-# Room Design Studio
+# Curly Carnival — Home Renovation Planning
 
 A browser-based home renovation planning platform for homeowners and renovation professionals. It helps users turn measured spaces and renovation ideas into reviewable plans, compare materials and products, and share decisions with contractors. Bathroom planning is the first workflow, built on a reusable project and space-planning foundation.
 
