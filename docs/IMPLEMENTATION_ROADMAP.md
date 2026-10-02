@@ -1,12 +1,16 @@
 # Implementation Roadmap
 
+This roadmap builds a home renovation planning platform. Bathroom planning is the initial pilot workflow, not the long-term product boundary.
+
 ## Product direction
 
-Build a browser-based bathroom planner that lets a homeowner create a measured room, arrange a useful set of fixtures, compare finishes, and review the same design in 2D and 3D. Use renovation professionals as early reviewers and pilot partners. Add company workflows after the core planning journey has been tested with real projects.
+Build a browser-based home renovation planning platform that helps homeowners plan measured spaces, make design and product decisions, and share clear proposals with renovation professionals. Its foundation is a renovation project containing one or more spaces, with space geometry and design choices independent of any one room type.
 
-The build order reduces product and technical risk in sequence: validate the room workflow, prove the design model, prove rendering, then add shared persistence, professional tools, analytics, and AI.
+The first pilot is bathroom planning. It should validate the shared project and space foundation through one complete workflow; bathroom-specific objects, clearance advice, materials, and screens stay within that workflow. Expand to other renovation work only after the pilot proves useful.
 
-## Initial pilot scope
+The build order reduces product and technical risk in sequence: validate the bathroom journey, prove the reusable project/space design model, prove rendering, then add shared persistence, professional tools, analytics, and AI.
+
+## First pilot scope: bathroom planning
 
 The first pilot should let a user:
 
@@ -17,7 +21,7 @@ The first pilot should let a user:
 - Try a few finish options and product variants.
 - Save, reopen, and share/export a design for discussion with a renovation professional.
 
-Keep fixture footprints user-defined until real catalogue data is available. Do not bake sample bathroom dimensions, opening placements, or product sizes into the editor. Defer photorealistic rendering, broad vendor integrations, quoting/pricing engines, billing, company administration, and model training until user feedback justifies them.
+Keep footprints user-defined until real catalogue data is available. Do not bake sample bathroom dimensions, opening placements, or fixture sizes into the editor. Treat bathroom clearance/access feedback as a workflow policy, not a universal construction-code claim. Defer photorealistic rendering, broad vendor integrations, quoting/pricing engines, billing, company administration, and model training until user feedback justifies them.
 
 ## Milestones and exit gates
 
@@ -40,10 +44,12 @@ Milestones are gates, not calendar estimates. Set dates only after the team size
 
 Python is used for FastAPI, authoritative server validation, persistence workflows, and data/AI jobs. TypeScript is used for the React editor, typed UI state, renderer integration, and fast local previews. The cross-language geometry contract and vectors keep preview feedback aligned with API decisions. Python AI/analytics workloads do not bypass API authorization or commit design mutations. See [ADR 0007](adr/0007-fastapi-python-api-typescript-editor.md) and [Milestone 0 domain contract](MILESTONE_0_DOMAIN_CONTRACT.md).
 
-### Room and product representation
+### Project, space, and item representation
 
-- Decide whether the first pilot needs only rectangular rooms or a wall-segment outline with common notches/returns.
-- Define wall thickness, door swing, window sill/height, fixture origin/pivot, mount surface, and orientation conventions.
+- Treat the renovation project as the container for one or more spaces; the first bathroom pilot may contain a single space.
+- Keep room boundary, walls, openings, and surfaces generic. Start with the bathroom contract's rectangular outline, while keeping the versioned model migratable to additional outlines when real workflows require them.
+- Represent placed things as design items with an optional catalogue/product reference. Keep bathroom-specific fixture categories and guidance in the bathroom workflow.
+- Define wall thickness, door swing, window sill/height, item origin/pivot, mount surface, and orientation conventions for the pilot.
 - Record dimensions in integer millimetres and maintain stable IDs and schema versions.
 - Establish an asset ingestion checklist for units, origin, dimensions, texture size, polygon budget, licence, and product/catalogue version.
 
@@ -64,7 +70,7 @@ Before inviting pilot users, select a few measurable outcomes, for example: time
 
 ## First implementation slice
 
-The first coding milestone should be narrow enough to finish end to end:
+The first coding milestone should be narrow enough to finish end to end while exercising the reusable renovation project/space boundary:
 
 1. Create a project with one bathroom represented by the agreed room outline.
 2. Add a door and window with explicit wall placement and dimensions.
@@ -73,4 +79,4 @@ The first coding milestone should be narrow enough to finish end to end:
 5. Undo/redo the last committed placement and persist/reopen the snapshot locally.
 6. Add tests for the geometry rules and one browser-level journey.
 
-After that slice is stable, generalize product types and connect the 3D renderer. Do not begin with company billing, a large catalogue, or model fine-tuning.
+After that slice is stable, connect the 3D renderer and use the validated project/space boundary for the next renovation workflow. Do not begin with company billing, a large catalogue, or model fine-tuning.
