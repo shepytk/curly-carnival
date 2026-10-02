@@ -1,4 +1,6 @@
-# Design contract v1
+# Legacy bathroom design contract v1
+
+This contract is retained as migration input for locally saved Milestone 1 bathroom designs. New projects use the [v2 renovation project contract](../v2/README.md).
 
 This folder is the language-neutral interchange contract for the initial bathroom pilot. Python/FastAPI owns authoritative geometry validation; the TypeScript editor may mirror checks for instant feedback. The deterministic cases here must be run against both implementations to prevent drift. Python workers may consume analytics/event contracts but must not treat this snapshot as permission to mutate a project.
 

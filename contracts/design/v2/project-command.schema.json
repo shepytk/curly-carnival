@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curly-carnival.github.io/contracts/design/v2/project-command.schema.json",
+  "title": "Renovation Project Command v2",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/createProject"
+    },
+    {
+      "$ref": "#/$defs/setSpace"
+    },
+    {
+      "$ref": "#/$defs/upsertOpening"
+    },
+    {
+      "$ref": "#/$defs/removeOpening"
+    },
+    {
+      "$ref": "#/$defs/placeItem"
+    },
+    {
+      "$ref": "#/$defs/moveItem"
+    },
+    {
+      "$ref": "#/$defs/rotateItem"
+    },
+    {
+      "$ref": "#/$defs/removeItem"
+    }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": [
+        "commandVersion",
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "type",
+        "payload"
+      ],
+      "properties": {
+        "commandVersion": {
+          "const": 2
+        },
+        "commandId": {
+          "$ref": "project-snapshot.schema.json#/$defs/id"
+        },
+        "projectId": {
+          "$ref": "project-snapshot.schema.json#/$defs/id"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "type": "string"
+        },
+        "payload": {}
+      }
+    },
+    "spaceId": {
+      "type": "object",
+      "required": [
+        "spaceId"
+      ],
+      "properties": {
+        "spaceId": {
+          "$ref": "project-snapshot.schema.json#/$defs/id"
+        }
+      }
+    },
+    "createProject": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "create-project"
+            },
+            "payload": {
+              "$ref": "project-snapshot.schema.json#/$defs/space"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "setSpace": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "set-space"
+            },
+            "payload": {
+              "$ref": "project-snapshot.schema.json#/$defs/space"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "upsertOpening": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "upsert-opening"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "opening"
+                  ],
+                  "properties": {
+                    "opening": {
+                      "$ref": "project-snapshot.schema.json#/$defs/opening"
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "removeOpening": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "remove-opening"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "openingId"
+                  ],
+                  "properties": {
+                    "openingId": {
+                      "$ref": "project-snapshot.schema.json#/$defs/id"
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "placeItem": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "place-item"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "item"
+                  ],
+                  "properties": {
+                    "item": {
+                      "$ref": "project-snapshot.schema.json#/$defs/item"
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "moveItem": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "move-item"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "itemId",
+                    "xMm",
+                    "yMm"
+                  ],
+                  "properties": {
+                    "itemId": {
+                      "$ref": "project-snapshot.schema.json#/$defs/id"
+                    },
+                    "xMm": {
+                      "type": "integer"
+                    },
+                    "yMm": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "rotateItem": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "rotate-item"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "itemId",
+                    "rotationDeg"
+                  ],
+                  "properties": {
+                    "itemId": {
+                      "$ref": "project-snapshot.schema.json#/$defs/id"
+                    },
+                    "rotationDeg": {
+                      "enum": [
+                        0,
+                        90,
+                        180,
+                        270
+                      ]
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    },
+    "removeItem": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "remove-item"
+            },
+            "payload": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/spaceId"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "itemId"
+                  ],
+                  "properties": {
+                    "itemId": {
+                      "$ref": "project-snapshot.schema.json#/$defs/id"
+                    }
+                  }
+                }
+              ],
+              "unevaluatedProperties": false,
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "type": "object"
+    }
+  }
+}

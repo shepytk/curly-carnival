@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curly-carnival.github.io/contracts/design/v2/project-snapshot.schema.json",
+  "title": "Renovation Project Snapshot v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "revision",
+    "units",
+    "spaces"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "projectId": {
+      "$ref": "#/$defs/id"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "units": {
+      "const": "mm"
+    },
+    "spaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/space"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "positiveMm": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonNegativeMm": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "space": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spaceId",
+        "name",
+        "spaceType",
+        "geometry",
+        "items"
+      ],
+      "properties": {
+        "spaceId": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "spaceType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "geometry": {
+          "$ref": "#/$defs/geometry"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/item"
+          }
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shape",
+        "widthMm",
+        "depthMm",
+        "wallHeightMm",
+        "openings"
+      ],
+      "properties": {
+        "shape": {
+          "const": "rectangle"
+        },
+        "widthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "depthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "wallHeightMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "openings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/opening"
+          }
+        }
+      }
+    },
+    "opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "openingId",
+        "kind",
+        "wall",
+        "offsetMm",
+        "widthMm",
+        "heightMm"
+      ],
+      "properties": {
+        "openingId": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "door",
+            "window"
+          ]
+        },
+        "wall": {
+          "enum": [
+            "south",
+            "east",
+            "north",
+            "west"
+          ]
+        },
+        "offsetMm": {
+          "$ref": "#/$defs/nonNegativeMm"
+        },
+        "widthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "heightMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "sillHeightMm": {
+          "$ref": "#/$defs/nonNegativeMm"
+        },
+        "swing": {
+          "enum": [
+            "inward-left",
+            "inward-right",
+            "none"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "window"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "sillHeightMm"
+            ],
+            "properties": {
+              "sillHeightMm": {}
+            },
+            "not": {
+              "required": [
+                "swing"
+              ],
+              "properties": {
+                "swing": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "door"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "sillHeightMm"
+              ],
+              "properties": {
+                "sillHeightMm": {}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "displayName",
+        "xMm",
+        "yMm",
+        "widthMm",
+        "depthMm",
+        "rotationDeg"
+      ],
+      "properties": {
+        "itemId": {
+          "$ref": "#/$defs/id"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "catalogueReference": {
+          "$ref": "#/$defs/catalogueReference"
+        },
+        "xMm": {
+          "type": "integer"
+        },
+        "yMm": {
+          "type": "integer"
+        },
+        "widthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "depthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "rotationDeg": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "clearance": {
+          "$ref": "#/$defs/clearance"
+        }
+      }
+    },
+    "catalogueReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productId",
+        "productVersion"
+      ],
+      "properties": {
+        "productId": {
+          "$ref": "#/$defs/id"
+        },
+        "productVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "clearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "widthMm",
+        "depthMm",
+        "direction"
+      ],
+      "properties": {
+        "widthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "depthMm": {
+          "$ref": "#/$defs/positiveMm"
+        },
+        "direction": {
+          "enum": [
+            "south",
+            "east",
+            "north",
+            "west"
+          ]
+        }
+      }
+    }
+  }
+}

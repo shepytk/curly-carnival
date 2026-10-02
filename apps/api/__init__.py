@@ -1,1 +1,1 @@
-"""Room Design Studio API package."""
+"""Curly Carnival renovation platform API package."""

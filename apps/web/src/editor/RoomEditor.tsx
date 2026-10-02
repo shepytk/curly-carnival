@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { DesignSession, newDesign, type DesignCommand } from "./application/design-session.ts";
-import { LocalDesignRepository } from "./adapters/local-design-repository.ts";
+import { ProjectSession, newBathroomProject, type ProjectCommand } from "./application/project-session.ts";
+import { LocalProjectRepository } from "./adapters/local-project-repository.ts";
 import { PlanRenderer } from "./adapters/PlanRenderer.tsx";
-import { analyzeClearances, type DesignSnapshot, type Opening, type ProductPlacement, type Room, type WallId } from "./domain/design.ts";
+import { analyzeClearances, type DesignItemPlacement, type Opening, type ProjectSnapshot, type SpaceGeometry, type WallId } from "./domain/design.ts";
 
-type RequestedCommand<T = DesignCommand> = T extends { expectedRevision: number } ? Omit<T, "expectedRevision"> : never;
+type RequestedCommand<T = ProjectCommand> = T extends { expectedRevision: number } ? Omit<T, "expectedRevision"> : never;
 
 const explainError = (code: string): string => {
   const copy: Record<string, string> = {
-    PLACEMENT_OUT_OF_BOUNDS: "That fixture does not fit inside the room. Move it fully within the walls.",
-    PLACEMENTS_OVERLAP: "That fixture overlaps another fixture. Move it to a clear area.",
+    ITEM_OUT_OF_BOUNDS: "That fixture does not fit inside the room. Move it fully within the walls.",
+    ITEMS_OVERLAP: "That fixture overlaps another fixture. Move it to a clear area.",
     CLEARANCE_INVALID: "Enter positive whole millimetres and a valid direction for the clearance zone.",
     OPENING_OUT_OF_BOUNDS: "That opening does not fit on the selected wall.",
     OPENINGS_OVERLAP: "That opening overlaps another opening on the same wall.",
@@ -23,9 +23,9 @@ const explainError = (code: string): string => {
 };
 
 export function RoomEditor() {
-  const repository = useMemo(() => new LocalDesignRepository(), []);
+  const repository = useMemo(() => new LocalProjectRepository(), []);
   const [loadResult] = useState(() => repository.load());
-  const [snapshot, setSnapshot] = useState<DesignSnapshot | null>(loadResult.status === "valid" ? loadResult.snapshot : null);
+  const [project, setProject] = useState<ProjectSnapshot | null>(loadResult.status === "valid" ? loadResult.project : null);
   const [recoveryCleared, setRecoveryCleared] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
   if (loadResult.status === "invalid" && !recoveryCleared) {
@@ -33,35 +33,35 @@ export function RoomEditor() {
       <p>The saved data is unreadable or uses a format this editor cannot open. It has not been replaced.</p>
       {recoveryError && <p role="alert">{recoveryError}</p>}
       <button className="button button-primary" onClick={() => {
-        try { repository.backupUnreadable(loadResult.raw); setRecoveryCleared(true); }
+        try { repository.backupUnreadable(loadResult.raw, loadResult.sourceKey); setRecoveryCleared(true); }
         catch { setRecoveryError("Could not back up the unreadable design. Free browser storage and try again."); }
       }}>Back up saved data and start a new design</button>
     </section></main>;
   }
-  if (!snapshot) return <NewDesignForm
+  if (!project) return <NewDesignForm
     notice={loadResult.status === "unavailable" ? "Browser storage is unavailable. You can create a design, but it cannot be saved in this browser." : undefined}
-    onCreate={(room) => setSnapshot(newDesign(room))}
+    onCreate={(geometry) => setProject(newBathroomProject(geometry))}
   />;
-  return <DesignWorkspace key={snapshot.designId} initial={snapshot} repository={repository} onNewDesign={(room) => setSnapshot(newDesign(room))} />;
+  return <BathroomWorkspace key={project.projectId} initial={project} repository={repository} onNewDesign={(geometry) => setProject(newBathroomProject(geometry))} />;
 }
 
-function NewDesignForm({ onCreate, notice }: { onCreate: (room: Room) => void; notice?: string }) {
+function NewDesignForm({ onCreate, notice }: { onCreate: (room: SpaceGeometry) => void; notice?: string }) {
   const [error, setError] = useState("");
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const room: Room = {
+    const geometry: SpaceGeometry = {
       shape: "rectangle",
       widthMm: Number(data.get("widthMm")),
       depthMm: Number(data.get("depthMm")),
       wallHeightMm: Number(data.get("wallHeightMm")),
       openings: [],
     };
-    if (Object.values(room).some((value) => typeof value === "number" && (!Number.isInteger(value) || value <= 0))) {
+    if (Object.values(geometry).some((value) => typeof value === "number" && (!Number.isInteger(value) || value <= 0))) {
       setError("Enter positive whole millimetre measurements for all room dimensions.");
       return;
     }
-    onCreate(room);
+    onCreate(geometry);
   };
   return <main className="setup-shell"><form className="setup-card" onSubmit={submit}>
     <p className="eyebrow">NEW BATHROOM DESIGN</p><h1>Measure your room</h1><p>Enter the room dimensions before adding openings and fixtures.</p>
@@ -73,42 +73,43 @@ function NewDesignForm({ onCreate, notice }: { onCreate: (room: Room) => void; n
   </form></main>;
 }
 
-function DesignWorkspace({ initial, repository, onNewDesign }: { initial: DesignSnapshot; repository: LocalDesignRepository; onNewDesign: (room: Room) => void }) {
-  const sessionRef = useRef<DesignSession | null>(null);
-  if (!sessionRef.current) sessionRef.current = new DesignSession(initial);
-  const [snapshot, setSnapshot] = useState(initial);
-  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
+function BathroomWorkspace({ initial, repository, onNewDesign }: { initial: ProjectSnapshot; repository: LocalProjectRepository; onNewDesign: (geometry: SpaceGeometry) => void }) {
+  const sessionRef = useRef<ProjectSession | null>(null);
+  if (!sessionRef.current) sessionRef.current = new ProjectSession(initial);
+  const [project, setProject] = useState(initial);
+  const space = project.spaces[0]!;
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [status, setStatus] = useState("Design ready. Measurements are in millimetres.");
   const [error, setError] = useState("");
   const [positionDraft, setPositionDraft] = useState({ xMm: 0, yMm: 0 });
   const [openingKind, setOpeningKind] = useState<Opening["kind"] | "">("");
   const [openingError, setOpeningError] = useState("");
   const [fixtureError, setFixtureError] = useState("");
-  const selectedPlacement = snapshot.placements.find((item) => item.placementId === selectedPlacementId) ?? null;
-  const warnings = analyzeClearances(snapshot);
+  const selectedItem = space.items.find((item) => item.itemId === selectedItemId) ?? null;
+  const warnings = analyzeClearances(space);
 
   useEffect(() => {
     try {
-      repository.save(snapshot);
+      repository.save(project);
     } catch {
       setStatus("This browser could not save the design. Check available local storage.");
     }
-  }, [repository, snapshot]);
+  }, [repository, project]);
 
   useEffect(() => {
-    if (selectedPlacement) setPositionDraft({ xMm: selectedPlacement.xMm, yMm: selectedPlacement.yMm });
-  }, [selectedPlacement?.placementId, selectedPlacement?.xMm, selectedPlacement?.yMm]);
+    if (selectedItem) setPositionDraft({ xMm: selectedItem.xMm, yMm: selectedItem.yMm });
+  }, [selectedItem?.itemId, selectedItem?.xMm, selectedItem?.yMm]);
 
   const dispatch = (command: RequestedCommand) => {
-    const result = sessionRef.current!.execute({ ...command, expectedRevision: snapshot.revision } as DesignCommand);
+    const result = sessionRef.current!.execute({ ...command, expectedRevision: project.revision } as ProjectCommand);
     if (!result.ok) {
       setError(explainError(result.errorCode));
       setStatus("Design change was not applied.");
       return false;
     }
-    setSnapshot(result.snapshot);
+    setProject(result.project);
     setError("");
-    setStatus(`Saved locally · revision ${result.snapshot.revision}`);
+    setStatus(`Saved locally · revision ${result.project.revision}`);
     return true;
   };
 
@@ -125,7 +126,7 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
       heightMm: Number(data.get("heightMm")),
       ...(kind === "window" ? { sillHeightMm: Number(data.get("sillHeightMm")) } : { swing: String(data.get("swing")) as Opening["swing"] }),
     };
-    if (dispatch({ type: "upsert-opening", opening })) {
+    if (dispatch({ type: "upsert-opening", spaceId: space.spaceId, opening })) {
       setOpeningError("");
       event.currentTarget.reset();
       setOpeningKind("");
@@ -143,16 +144,14 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
       setFixtureError("To define a clearance zone, enter its width, depth, and direction.");
       return;
     }
-    const placement: ProductPlacement = {
-      placementId: crypto.randomUUID(),
-      productId: `custom-${crypto.randomUUID()}`,
+    const item: DesignItemPlacement = {
+      itemId: crypto.randomUUID(),
       displayName: String(data.get("displayName")).trim(),
-      productVersion: "user-defined",
       xMm: Number(data.get("xMm")),
       yMm: Number(data.get("yMm")),
       widthMm: Number(data.get("widthMm")),
       depthMm: Number(data.get("depthMm")),
-      rotationDeg: Number(data.get("rotationDeg")) as ProductPlacement["rotationDeg"],
+      rotationDeg: Number(data.get("rotationDeg")) as DesignItemPlacement["rotationDeg"],
       ...(clearanceWidth && clearanceDepth ? {
         clearance: {
           widthMm: Number(clearanceWidth),
@@ -161,8 +160,8 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
         },
       } : {}),
     };
-    if (dispatch({ type: "place-product", placement })) {
-      setSelectedPlacementId(placement.placementId);
+    if (dispatch({ type: "place-item", spaceId: space.spaceId, item })) {
+      setSelectedItemId(item.itemId);
       setFixtureError("");
       event.currentTarget.reset();
     } else setFixtureError("Check the name, dimensions, rotation, position, and available room area.");
@@ -171,23 +170,26 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
   const submitRoomDimensions = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const room = {
-      ...snapshot.room,
-      widthMm: Number(form.get("widthMm")),
-      depthMm: Number(form.get("depthMm")),
+    const updatedSpace = {
+      ...space,
+      geometry: {
+        ...space.geometry,
+        widthMm: Number(form.get("widthMm")),
+        depthMm: Number(form.get("depthMm")),
+      },
     };
-    dispatch({ type: "set-room", room });
+    dispatch({ type: "set-space", space: updatedSpace });
   };
 
   const submitPosition = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedPlacement) return;
-    dispatch({ type: "move-product", placementId: selectedPlacement.placementId, ...positionDraft });
+    if (!selectedItem) return;
+    dispatch({ type: "move-item", spaceId: space.spaceId, itemId: selectedItem.itemId, ...positionDraft });
   };
 
-  const setHistorySnapshot = (next: DesignSnapshot | null, verb: string) => {
+  const setHistorySnapshot = (next: ProjectSnapshot | null, verb: string) => {
     if (!next) return;
-    setSnapshot(next);
+    setProject(next);
     setError("");
     setStatus(`${verb} · revision ${next.revision}`);
   };
@@ -198,21 +200,21 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
       setError(saved.status === "unavailable" ? "Browser storage is unavailable, so the saved design cannot be reopened." : "There is no readable saved design in this browser.");
       return;
     }
-    sessionRef.current = new DesignSession(saved.snapshot);
-    setSnapshot(saved.snapshot);
-    setSelectedPlacementId(null);
+    sessionRef.current = new ProjectSession(saved.project);
+    setProject(saved.project);
+    setSelectedItemId(null);
     setError("");
     setStatus("Saved design reopened from this browser.");
   };
 
   const startNew = () => {
-    onNewDesign({ ...snapshot.room, openings: [] });
-    setSelectedPlacementId(null);
+    onNewDesign({ ...space.geometry, openings: [] });
+    setSelectedItemId(null);
     setError("");
     setStatus("New bathroom design started.");
   };
 
-  const removeOpening = (opening: Opening) => dispatch({ type: "remove-opening", openingId: opening.openingId });
+  const removeOpening = (opening: Opening) => dispatch({ type: "remove-opening", spaceId: space.spaceId, openingId: opening.openingId });
 
   return (
     <main className="studio-shell">
@@ -225,7 +227,7 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
         <div className="topbar-actions">
           <button className="button button-quiet" onClick={reopen}>Reopen saved</button>
           <button className="button button-quiet" onClick={startNew}>New design</button>
-          <button className="button button-primary" onClick={() => { try { repository.save(snapshot); setError(""); setStatus("Design saved on this device."); } catch { setError("Could not save to this browser."); } }}>Save design</button>
+          <button className="button button-primary" onClick={() => { try { repository.save(project); setError(""); setStatus("Design saved on this device."); } catch { setError("Could not save to this browser."); } }}>Save design</button>
         </div>
       </header>
 
@@ -235,16 +237,16 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
           <h1>Plan your bathroom</h1>
           <p className="lede">Set the room measurements, add openings and try fixture positions to scale.</p>
         </div>
-        <div className="revision-chip">Design v1 <span>·</span> {snapshot.revision === 0 ? "Draft" : `Revision ${snapshot.revision}`}</div>
+        <div className="revision-chip">Project v2 <span>·</span> {project.revision === 0 ? "Draft" : `Revision ${project.revision}`}</div>
       </div>
 
       <div className="workspace-grid">
         <aside className="sidebar" aria-label="Design controls">
           <section className="panel-section">
             <div className="section-heading"><span className="step-number">01</span><h2>Room size</h2></div>
-            <form key={`${snapshot.room.widthMm}-${snapshot.room.depthMm}`} className="dimension-form" onSubmit={submitRoomDimensions}>
-              <label>Width <span>mm</span><input name="widthMm" type="number" min="1" step="1" defaultValue={snapshot.room.widthMm} /></label>
-              <label>Depth <span>mm</span><input name="depthMm" type="number" min="1" step="1" defaultValue={snapshot.room.depthMm} /></label>
+            <form key={`${space.geometry.widthMm}-${space.geometry.depthMm}`} className="dimension-form" onSubmit={submitRoomDimensions}>
+              <label>Width <span>mm</span><input name="widthMm" type="number" min="1" step="1" defaultValue={space.geometry.widthMm} /></label>
+              <label>Depth <span>mm</span><input name="depthMm" type="number" min="1" step="1" defaultValue={space.geometry.depthMm} /></label>
               <button className="button button-outline" type="submit">Update room</button>
             </form>
           </section>
@@ -267,9 +269,9 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
               {openingError && <p className="form-error" role="alert">{openingError}</p>}
             </form>
             <p className="helper-copy">Wall offset begins at the inside start corner defined by the room plan.</p>
-            {snapshot.room.openings.length > 0 ? (
+            {space.geometry.openings.length > 0 ? (
               <ul className="item-list" aria-label="Room openings">
-                {snapshot.room.openings.map((opening) => (
+                {space.geometry.openings.map((opening) => (
                   <li key={opening.openingId}>
                     <span className={`item-indicator ${opening.kind}`} />
                     <span>{opening.kind === "door" ? "Door" : "Window"}<small>{opening.wall} wall · offset {opening.offsetMm} mm · {opening.widthMm} × {opening.heightMm} mm</small></span>
@@ -299,24 +301,24 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
               <button className="button button-outline" type="submit">Add fixture</button>
             </form>
             <ul className="item-list fixture-list" aria-label="Placed fixtures">
-              {snapshot.placements.map((item) => {
-                const label = item.displayName ?? item.productId;
-                return <li key={item.placementId}>
+              {space.items.map((item) => {
+                const label = item.displayName;
+                return <li key={item.itemId}>
                   <span className="item-indicator fixture-indicator" />
-                  <button className="fixture-select" aria-pressed={selectedPlacementId === item.placementId} onClick={() => setSelectedPlacementId(item.placementId)}>
+                  <button className="fixture-select" aria-pressed={selectedItemId === item.itemId} onClick={() => setSelectedItemId(item.itemId)}>
                     {label}<small>{item.widthMm} × {item.depthMm} mm · {item.xMm}, {item.yMm} mm · {item.rotationDeg}°</small>
                   </button>
                 </li>;
               })}
             </ul>
             {warnings.length > 0 && <div className="warning-panel" role="status"><strong>Clearance warnings</strong><ul>{warnings.map((warning, index) => {
-              const subject = snapshot.placements.find((item) => item.placementId === warning.placementId)?.displayName ?? "Fixture";
-              const related = snapshot.placements.find((item) => item.placementId === warning.relatedPlacementId)?.displayName;
-              return <li key={`${warning.code}-${warning.placementId}-${index}`}>{subject}: {warning.code === "CLEARANCE_OUT_OF_ROOM" ? "clearance zone extends beyond the room." : `clearance zone intersects ${related ?? "another fixture"}.`}</li>;
+              const subject = space.items.find((item) => item.itemId === warning.itemId)?.displayName ?? "Fixture";
+              const related = space.items.find((item) => item.itemId === warning.relatedItemId)?.displayName;
+              return <li key={`${warning.code}-${warning.itemId}-${index}`}>{subject}: {warning.code === "CLEARANCE_OUT_OF_SPACE" ? "clearance zone extends beyond the room." : `clearance zone intersects ${related ?? "another fixture"}.`}</li>;
             })}</ul></div>}
           </section>
 
-          {selectedPlacement && <section className="panel-section selected-section">
+          {selectedItem && <section className="panel-section selected-section">
             <div className="section-heading"><span className="step-number">04</span><h2>Selected fixture</h2></div>
             <form className="position-form" onSubmit={submitPosition}>
               <label>X position (mm)<input type="number" step="1" value={positionDraft.xMm} onChange={(event) => setPositionDraft({ ...positionDraft, xMm: Number(event.target.value) })} /></label>
@@ -324,8 +326,8 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
               <button className="button button-outline" type="submit">Apply position</button>
             </form>
             <div className="button-row selected-actions">
-              <button className="button button-outline" onClick={() => dispatch({ type: "rotate-product", placementId: selectedPlacement.placementId, rotationDeg: ((selectedPlacement.rotationDeg + 90) % 360) as ProductPlacement["rotationDeg"] })}>Rotate 90°</button>
-              <button className="button button-danger" onClick={() => { if (dispatch({ type: "remove-product", placementId: selectedPlacement.placementId })) setSelectedPlacementId(null); }}>Remove</button>
+              <button className="button button-outline" onClick={() => dispatch({ type: "rotate-item", spaceId: space.spaceId, itemId: selectedItem.itemId, rotationDeg: ((selectedItem.rotationDeg + 90) % 360) as DesignItemPlacement["rotationDeg"] })}>Rotate 90°</button>
+              <button className="button button-danger" onClick={() => { if (dispatch({ type: "remove-item", spaceId: space.spaceId, itemId: selectedItem.itemId })) setSelectedItemId(null); }}>Remove</button>
             </div>
           </section>}
         </aside>
@@ -340,10 +342,10 @@ function DesignWorkspace({ initial, repository, onNewDesign }: { initial: Design
           </div>
           <div className="canvas-content">
             <PlanRenderer
-              snapshot={snapshot}
-              selectedPlacementId={selectedPlacementId}
-              onSelect={setSelectedPlacementId}
-              onMove={(placementId, xMm, yMm) => dispatch({ type: "move-product", placementId, xMm, yMm })}
+              space={space}
+              selectedItemId={selectedItemId}
+              onSelect={setSelectedItemId}
+              onMove={(itemId, xMm, yMm) => dispatch({ type: "move-item", spaceId: space.spaceId, itemId, xMm, yMm })}
             />
           </div>
           <div className="canvas-footer">

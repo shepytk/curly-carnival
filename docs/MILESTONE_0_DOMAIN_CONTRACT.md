@@ -1,6 +1,6 @@
 # Milestone 0: product and domain contract
 
-This document records the initial bathroom-pilot assumptions and the narrow v1 workflow contract that implementation will build against. The platform architecture treats renovation projects and spaces as reusable concepts; this contract deliberately limits the first workflow to a reviewable bathroom plan and is not a general CAD format.
+This document records the initial bathroom-pilot assumptions and the narrow v1 workflow contract that the first implementation used. The platform architecture treats renovation projects and spaces as reusable concepts; the canonical implementation now uses the [v2 renovation project contract](../contracts/design/v2/README.md) and retains v1 only as migration input.
 
 ## Pilot user and journey
 
@@ -34,7 +34,7 @@ The TypeScript browser uses local checks during drag previews. FastAPI/Pydantic 
 
 Python analytics/AI workloads use versioned JSON payloads and Python's data/AI ecosystem, behind separate worker interfaces. They do not bypass API validation or commit design mutations. An AI-generated change is only a proposal; the accepted command is submitted to FastAPI and validated with the same domain rules as a human edit.
 
-The v1 shape is documented in [`../contracts/design/v1/README.md`](../contracts/design/v1/README.md). The deterministic geometry vectors there become executable domain tests in Milestone 1.
+The original v1 shape is documented in [`../contracts/design/v1/README.md`](../contracts/design/v1/README.md). Milestone 1 introduced the [v2 project/space contract](../contracts/design/v2/README.md); its deterministic geometry vectors run against both the Python domain and TypeScript editor checks.
 
 ## Still needed to close Milestone 0
 

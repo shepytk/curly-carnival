@@ -4,7 +4,7 @@ A browser-based home renovation planning platform for homeowners and renovation 
 
 ## Project status
 
-Milestone 1 has started. The repository now includes the v1 geometry contract, Python authoritative geometry rules, TypeScript editor checks and command session, and the 2D bathroom editor source. See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for milestone gates and progress. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, and rendering guidance. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
+Milestone 1 has started. The repository now includes the v2 renovation-project contract, Python authoritative geometry rules, TypeScript editor checks and project command session, v1 local-data migration, and the 2D bathroom workflow. See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for milestone gates and progress. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, interfaces, and rendering guidance. See [IN_APP_DESIGN_ASSISTANT_WORKFLOW.md](docs/IN_APP_DESIGN_ASSISTANT_WORKFLOW.md) for the customer-facing design assistant workflow, and [DEVELOPMENT_AI_WORKFLOW.md](docs/DEVELOPMENT_AI_WORKFLOW.md) for coding-agent instructions, skills, and cost-saving scripts.
 
 ## Product goals
 
@@ -61,13 +61,14 @@ docs/
   DEVELOPMENT_AI_WORKFLOW.md
   adr/                 Architecture decision records
 contracts/
-  design/v1/            Snapshot/command schemas and shared geometry test vectors
+  design/v1/            Legacy bathroom snapshot accepted for migration
+  design/v2/            Project/space schemas, commands, and shared geometry vectors
 AGENTS.md              Repository-wide coding-agent instructions
 .codex/skills/         Task-specific, reusable agent skills
 scripts/ai/            Deterministic context and validation helpers
 ```
 
-The exact workspace tooling (for example pnpm workspaces) is to be selected when implementation starts. Avoid adding packages before an actual feature needs them.
+The repository uses a pnpm workspace. Add packages only when an implemented feature requires them.
 
 ## Architecture rules
 
@@ -90,7 +91,7 @@ pnpm install
 pnpm dev
 ```
 
-Run the dependency-free geometry and session tests with Node 24+ and Python 3.12+:
+After installing dependencies, run the geometry, schema, migration, session, and Python parity tests with Node 24+ and Python 3.12+:
 
 ```bash
 pnpm check

@@ -44,6 +44,10 @@ test("create a measured bathroom, place fixtures, reject overlap, undo, and reop
   await page.getByRole("button", { name: "Redo" }).click();
   await expect(placed.getByRole("button", { name: /Shower/ })).toBeVisible();
   await page.getByRole("button", { name: "Save design" }).click();
+  const savedProject = await page.evaluate(() => JSON.parse(localStorage.getItem("curly-carnival:current-project:v2") ?? "null"));
+  expect(savedProject.schemaVersion).toBe(2);
+  expect(savedProject.spaces[0].spaceType).toBe("bathroom");
+  expect(savedProject.spaces[0].items.map((item: { displayName: string }) => item.displayName)).toEqual(["Vanity", "Shower"]);
 
   await page.reload();
   const reopened = page.getByRole("list", { name: "Placed fixtures" });
@@ -69,4 +73,5 @@ test("preserve unreadable local design data until the user backs it up and repla
   await page.getByLabel("Wall height (mm)").fill("2400");
   await page.getByRole("button", { name: "Create design" }).click();
   await expect(page.getByRole("heading", { name: "Plan your bathroom" })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("curly-carnival:current-project:v2") ?? "null").schemaVersion)).toBe(2);
 });

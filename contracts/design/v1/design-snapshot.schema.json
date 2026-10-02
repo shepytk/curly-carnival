@@ -52,11 +52,11 @@
       "allOf": [
         {
           "if": { "properties": { "kind": { "const": "window" } }, "required": ["kind"] },
-          "then": { "required": ["sillHeightMm"], "not": { "required": ["swing"] } }
+          "then": { "required": ["sillHeightMm"], "properties": { "sillHeightMm": {} }, "not": { "required": ["swing"], "properties": { "swing": {} } } }
         },
         {
           "if": { "properties": { "kind": { "const": "door" } }, "required": ["kind"] },
-          "then": { "not": { "required": ["sillHeightMm"] } }
+          "then": { "not": { "required": ["sillHeightMm"], "properties": { "sillHeightMm": {} } } }
         }
       ]
     },

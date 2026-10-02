@@ -1,7 +1,7 @@
 import { Layer, Line, Rect, Stage, Text } from "react-konva";
 import { Fragment } from "react";
 import type Konva from "konva";
-import type { DesignSnapshot, Opening, ProductPlacement, WallId } from "../domain/design.ts";
+import type { DesignItemPlacement, Opening, RenovationSpace, WallId } from "../domain/design.ts";
 
 const STAGE_WIDTH = 780;
 const STAGE_HEIGHT = 620;
@@ -12,14 +12,14 @@ const SNAP_MM = 50;
 
 const snapToGrid = (valueMm: number) => Math.round(valueMm / SNAP_MM) * SNAP_MM;
 
-function effectiveSize(item: ProductPlacement) {
+function effectiveSize(item: DesignItemPlacement) {
   return item.rotationDeg === 90 || item.rotationDeg === 270
     ? { widthMm: item.depthMm, depthMm: item.widthMm }
     : { widthMm: item.widthMm, depthMm: item.depthMm };
 }
 
-function openingSegment(opening: Opening, snapshot: DesignSnapshot, scale: number): [number, number, number, number] {
-  const { widthMm: roomWidth, depthMm: roomDepth } = snapshot.room;
+function openingSegment(opening: Opening, space: RenovationSpace, scale: number): [number, number, number, number] {
+  const { widthMm: roomWidth, depthMm: roomDepth } = space.geometry;
   const start = opening.offsetMm * scale;
   const end = (opening.offsetMm + opening.widthMm) * scale;
   const west = PAD;
@@ -36,31 +36,31 @@ function openingSegment(opening: Opening, snapshot: DesignSnapshot, scale: numbe
 }
 
 interface PlanRendererProps {
-  snapshot: DesignSnapshot;
-  selectedPlacementId: string | null;
-  onSelect: (placementId: string | null) => void;
-  onMove: (placementId: string, xMm: number, yMm: number) => void;
+  space: RenovationSpace;
+  selectedItemId: string | null;
+  onSelect: (itemId: string | null) => void;
+  onMove: (itemId: string, xMm: number, yMm: number) => void;
 }
 
-export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }: PlanRendererProps) {
-  const scale = Math.min(INNER_WIDTH / snapshot.room.widthMm, INNER_HEIGHT / snapshot.room.depthMm);
-  const planWidth = snapshot.room.widthMm * scale;
-  const planDepth = snapshot.room.depthMm * scale;
+export function PlanRenderer({ space, selectedItemId, onSelect, onMove }: PlanRendererProps) {
+  const scale = Math.min(INNER_WIDTH / space.geometry.widthMm, INNER_HEIGHT / space.geometry.depthMm);
+  const planWidth = space.geometry.widthMm * scale;
+  const planDepth = space.geometry.depthMm * scale;
   const planX = PAD + (INNER_WIDTH - planWidth) / 2;
   const planY = PAD + (INNER_HEIGHT - planDepth) / 2;
   const xOffset = planX - PAD;
   const yOffset = planY - PAD;
 
-  const moveFromCanvas = (item: ProductPlacement, node: Konva.Node) => {
+  const moveFromCanvas = (item: DesignItemPlacement, node: Konva.Node) => {
     const size = effectiveSize(item);
     const xMm = snapToGrid((node.x() - planX) / scale);
     const topMm = snapToGrid((node.y() - planY) / scale);
-    const yMm = snapToGrid(snapshot.room.depthMm - topMm - size.depthMm);
-    onMove(item.placementId, xMm, yMm);
+    const yMm = snapToGrid(space.geometry.depthMm - topMm - size.depthMm);
+    onMove(item.itemId, xMm, yMm);
   };
 
   return (
-    <div className="plan-frame" role="img" aria-label={`2D room plan, ${snapshot.room.widthMm} by ${snapshot.room.depthMm} millimetres`}>
+    <div className="plan-frame" role="img" aria-label={`2D room plan, ${space.geometry.widthMm} by ${space.geometry.depthMm} millimetres`}>
       <Stage
         width={STAGE_WIDTH}
         height={STAGE_HEIGHT}
@@ -80,8 +80,8 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
             strokeWidth={5}
             listening={false}
           />
-          {snapshot.room.openings.map((opening) => {
-            const points = openingSegment(opening, snapshot, scale).map((value, index) => {
+          {space.geometry.openings.map((opening) => {
+            const points = openingSegment(opening, space, scale).map((value, index) => {
               if (index === 0 || index === 2) return value + xOffset;
               return value + yOffset;
             });
@@ -100,7 +100,7 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
             x={planX}
             y={Math.max(8, planY - 34)}
             width={planWidth}
-            text={`${snapshot.room.widthMm} mm`}
+            text={`${space.geometry.widthMm} mm`}
             align="center"
             fontSize={14}
             fill="#56625c"
@@ -110,14 +110,14 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
             x={Math.max(6, planX - 64)}
             y={planY + planDepth / 2 - 9}
             width={56}
-            text={`${snapshot.room.depthMm} mm`}
+            text={`${space.geometry.depthMm} mm`}
             align="right"
             fontSize={13}
             fill="#56625c"
             listening={false}
           />
-          {snapshot.room.openings.map((opening) => {
-            const points = openingSegment(opening, snapshot, scale).map((value, index) => {
+          {space.geometry.openings.map((opening) => {
+            const points = openingSegment(opening, space, scale).map((value, index) => {
               if (index === 0 || index === 2) return value + xOffset;
               return value + yOffset;
             });
@@ -132,13 +132,13 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
               />
             );
           })}
-          {snapshot.placements.map((item) => {
+          {space.items.map((item) => {
             const size = effectiveSize(item);
             const x = planX + item.xMm * scale;
-            const y = planY + (snapshot.room.depthMm - item.yMm - size.depthMm) * scale;
-            const selected = selectedPlacementId === item.placementId;
+            const y = planY + (space.geometry.depthMm - item.yMm - size.depthMm) * scale;
+            const selected = selectedItemId === item.itemId;
             return (
-              <Fragment key={item.placementId}>
+              <Fragment key={item.itemId}>
                 <Rect
                   x={x}
                   y={y}
@@ -149,16 +149,16 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
                   strokeWidth={selected ? 3 : 2}
                   cornerRadius={4}
                   draggable
-                  onClick={() => onSelect(item.placementId)}
-                  onTap={() => onSelect(item.placementId)}
-                  onDragStart={() => onSelect(item.placementId)}
+                  onClick={() => onSelect(item.itemId)}
+                  onTap={() => onSelect(item.itemId)}
+                  onDragStart={() => onSelect(item.itemId)}
                   onDragEnd={(event) => moveFromCanvas(item, event.target)}
                 />
                 <Text
                   x={x + 6}
                   y={y + 7}
                   width={Math.max(40, size.widthMm * scale - 12)}
-                  text={item.displayName ?? "Fixture"}
+                  text={item.displayName ?? "Item"}
                   fontSize={13}
                   fill="#26332e"
                   align="center"

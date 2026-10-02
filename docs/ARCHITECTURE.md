@@ -61,7 +61,7 @@ Owns reusable renovation concepts and invariants, with workflow-specific policie
 - Workflow policies for domain-specific guidance. For example, bathroom fixture clearance/access guidance is reported separately as warnings and must not be presented as universal code compliance.
 - Domain events such as `DesignItemPlaced` or `SpaceGeometryChanged` where they provide useful integration seams.
 
-The current implementation and v1 contract may use narrower room/fixture terms while the bathroom pilot is built. Keep that pilot scope explicit; migrate names and payloads only through versioned, tested changes when another workflow establishes the need.
+The v2 project contract implements these boundaries with `ProjectSnapshot`, `RenovationSpace`, and generic design-item placements. The browser accepts the original v1 bathroom snapshot only as migration input and writes v2 after loading it. Bathroom terms remain in the workflow UI where they describe the user's current task.
 
 Represent authoritative dimensions as integer millimetres. Convert to metres only at the 3D adapter boundary. This avoids floating point drift in editing and persistence. Use explicit coordinate conventions: plan X/Y in millimetres, floor elevation Z in millimetres; renderer maps plan Y to world Z and elevation to world Y.
 
@@ -79,9 +79,9 @@ The Python API application layer coordinates committed user goals. Its use cases
 - `AssignFinish`
 - `UndoDesignChange` / `RedoDesignChange`
 - `LoadProject` / `SaveProject`
-- `ExportDesignSnapshot`
+- `ExportProjectSnapshot`
 
-Each server command is validated before mutation. A use case returns a typed result with either a new immutable design snapshot and emitted events, or structured validation errors. These use cases do not import UI or rendering packages. The TypeScript editor application coordinates transient interaction state and translates gestures into versioned commands; it is not a second persistence or authorization boundary.
+Each server command is validated before mutation. A use case returns a typed result with either a new immutable project snapshot and emitted events, or structured validation errors. These use cases do not import UI or rendering packages. The TypeScript editor application coordinates transient interaction state and translates gestures into versioned commands; it is not a second persistence or authorization boundary.
 
 ### Presentation (`apps/web`)
 
@@ -91,7 +91,7 @@ The front end maintains transient interaction state separately from saved design
 
 ### Rendering adapters (`apps/web/src/adapters/renderer-2d`, `renderer-3d`)
 
-Convert an immutable `DesignSnapshot` plus transient viewport state into pixels. They do not create canonical product records, write to persistence, or apply design mutations directly. Pointer/keyboard gestures are translated into semantic intents (select, request move, request resize) that the application validates.
+Convert an immutable `RenovationSpace` from a `ProjectSnapshot`, plus transient viewport state, into pixels. They do not create canonical product records, write to persistence, or apply design mutations directly. Pointer/keyboard gestures are translated into semantic intents (select, request move, request resize) that the application validates.
 
 ### API and infrastructure (`apps/api`, `adapters`)
 
@@ -109,8 +109,8 @@ Define behavior as small interfaces at the point of use. Use TypeScript interfac
 
 ```ts
 export interface ProjectRepository {
-  get(projectId: ProjectId, actorId: UserId): Promise<DesignSnapshot | null>;
-  save(snapshot: DesignSnapshot, expectedRevision: number): Promise<SaveResult>;
+  get(projectId: ProjectId, actorId: UserId): Promise<ProjectSnapshot | null>;
+  save(project: ProjectSnapshot, expectedRevision: number): Promise<SaveResult>;
 }
 
 export interface ProductCatalog {
@@ -138,11 +138,11 @@ The API defines equivalent ports in Python so infrastructure dependencies remain
 from typing import Protocol
 
 class ProjectRepository(Protocol):
-    async def get(self, project_id: str, actor_id: str) -> "DesignSnapshot | None": ...
-    async def save(self, snapshot: "DesignSnapshot", expected_revision: int) -> "SaveResult": ...
+    async def get(self, project_id: str, actor_id: str) -> "ProjectSnapshot | None": ...
+    async def save(self, project: "ProjectSnapshot", expected_revision: int) -> "SaveResult": ...
 ```
 
-Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `UsageEventRecorder`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(snapshot, viewport)` and semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
+Use small ports such as `ProjectRepository`, `ProductCatalog`, `AssetStore`, `UsageEventRecorder`, `Clock`, `IdGenerator`, and `AuthorizationPolicy`. A renderer contract should describe what it needs and emits, for example `PlanRenderer.render(space, viewport)` and semantic `EditorIntent`s. Keep rendering-engine-specific values (Three.js `Object3D`, Konva nodes, GPU resources) inside their adapters.
 
 ### Dependency rules
 
@@ -205,9 +205,9 @@ For manipulation, use a preview/commit flow: pointer movement updates only a tra
 
 ## 7. Design data and API
 
-### Canonical design snapshot
+### Canonical project snapshot
 
-Persist a versioned renovation project document with IDs, integer millimetre dimensions and coordinates, spaces, design-item placements, and finish references. Store catalogue product metadata separately from project placements. A placed item may reference a product/version plus placement transform; it should not embed a mutable vendor product record. The initial bathroom snapshot can remain one-space and rectangular; versioning and migrations provide a safe path to broader validated room workflows.
+Persist a versioned renovation project document with IDs, integer millimetre dimensions and coordinates, spaces, design-item placements, and finish references. Store catalogue product metadata separately from project placements. A placed item may reference a product/version plus placement transform; it should not embed a mutable vendor product record. The v2 contract permits multiple spaces; the bathroom workflow currently creates one rectangular space. Versioning and migrations provide a safe path to broader validated geometry.
 
 Include:
 
@@ -294,7 +294,7 @@ Use a small allowlisted event catalogue and a versioned envelope. A useful envel
 - A minimal event-specific payload, such as action outcome or coarse duration bucket.
 - Purpose/eligibility metadata needed to enforce retention, deletion, and learning-data rules.
 
-Record completed semantic actions such as `ProjectCreated`, `ProductPlaced`, `DesignSaved`, `MaterialAssigned`, and `DesignAssistantProposalAccepted`. For the in-app assistant, useful outcome events include accepted, edited, dismissed, and later undone, linked by proposal ID and design revision. Avoid hover, pointer-move, camera-frame, and every-keystroke events; they create cost and noise without reliable intent. Do not collect raw prompts, customer names, addresses, images, or full room geometry by default. If a later feature needs richer examples, define the data purpose, user notice/choice, access, retention, and deletion path before collecting them.
+Record completed semantic actions such as `ProjectCreated`, `DesignItemPlaced`, `ProjectSaved`, `FinishAssigned`, and `DesignAssistantProposalAccepted`. For the in-app assistant, useful outcome events include accepted, edited, dismissed, and later undone, linked by proposal ID and project revision. Avoid hover, pointer-move, camera-frame, and every-keystroke events; they create cost and noise without reliable intent. Do not collect raw prompts, customer names, addresses, images, or full space geometry by default. If a later feature needs richer examples, define the data purpose, user notice/choice, access, retention, and deletion path before collecting them.
 
 Keep event names stable and evolve schemas additively where practical. Consumers must tolerate unknown fields and event versions. Store catalogue version references rather than mutable product labels so historic events remain interpretable.
 
