@@ -37,8 +37,8 @@
       "description": "Two south wall openings fit without overlap",
       "room": { "widthMm": 2400, "depthMm": 3000 },
       "openings": [
-        { "wall": "south", "offsetMm": 100, "widthMm": 900 },
-        { "wall": "south", "offsetMm": 1200, "widthMm": 800 }
+        { "kind": "door", "wall": "south", "offsetMm": 100, "widthMm": 900, "heightMm": 2000, "swing": "inward-left" },
+        { "kind": "window", "wall": "south", "offsetMm": 1200, "widthMm": 800, "heightMm": 900, "sillHeightMm": 900 }
       ],
       "expected": { "valid": true }
     },
@@ -46,7 +46,7 @@
       "id": "G-006",
       "description": "Opening extends past south wall end",
       "room": { "widthMm": 2400, "depthMm": 3000 },
-      "openings": [{ "wall": "south", "offsetMm": 1800, "widthMm": 900 }],
+      "openings": [{ "kind": "door", "wall": "south", "offsetMm": 1800, "widthMm": 900, "heightMm": 2000, "swing": "inward-left" }],
       "expected": { "valid": false, "errorCode": "OPENING_OUT_OF_BOUNDS" }
     },
     {
@@ -54,8 +54,8 @@
       "description": "Two openings on the same wall overlap",
       "room": { "widthMm": 2400, "depthMm": 3000 },
       "openings": [
-        { "wall": "south", "offsetMm": 100, "widthMm": 900 },
-        { "wall": "south", "offsetMm": 800, "widthMm": 600 }
+        { "kind": "door", "wall": "south", "offsetMm": 100, "widthMm": 900, "heightMm": 2000, "swing": "inward-left" },
+        { "kind": "door", "wall": "south", "offsetMm": 800, "widthMm": 600, "heightMm": 2000, "swing": "inward-right" }
       ],
       "expected": { "valid": false, "errorCode": "OPENINGS_OVERLAP" }
     },

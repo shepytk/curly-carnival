@@ -67,12 +67,24 @@
       "properties": {
         "placementId": { "$ref": "#/$defs/id" },
         "productId": { "$ref": "#/$defs/id" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
         "productVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
         "xMm": { "type": "integer" },
         "yMm": { "type": "integer" },
         "widthMm": { "$ref": "#/$defs/positiveMm" },
         "depthMm": { "$ref": "#/$defs/positiveMm" },
-        "rotationDeg": { "enum": [0, 90, 180, 270] }
+        "rotationDeg": { "enum": [0, 90, 180, 270] },
+        "clearance": { "$ref": "#/$defs/clearance" }
+      }
+    },
+    "clearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["widthMm", "depthMm", "direction"],
+      "properties": {
+        "widthMm": { "$ref": "#/$defs/positiveMm" },
+        "depthMm": { "$ref": "#/$defs/positiveMm" },
+        "direction": { "enum": ["south", "east", "north", "west"] }
       }
     }
   }

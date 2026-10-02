@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { DesignSession, newDesign, type DesignCommand } from "./application/design-session.ts";
 import { LocalDesignRepository } from "./adapters/local-design-repository.ts";
 import { PlanRenderer } from "./adapters/PlanRenderer.tsx";
-import type { DesignSnapshot, Opening, ProductPlacement } from "./domain/design.ts";
+import { analyzeClearances, type DesignSnapshot, type Opening, type ProductPlacement, type Room, type WallId } from "./domain/design.ts";
 
 type RequestedCommand<T = DesignCommand> = T extends { expectedRevision: number } ? Omit<T, "expectedRevision"> : never;
 
@@ -10,6 +10,7 @@ const explainError = (code: string): string => {
   const copy: Record<string, string> = {
     PLACEMENT_OUT_OF_BOUNDS: "That fixture does not fit inside the room. Move it fully within the walls.",
     PLACEMENTS_OVERLAP: "That fixture overlaps another fixture. Move it to a clear area.",
+    CLEARANCE_INVALID: "Enter positive whole millimetres and a valid direction for the clearance zone.",
     OPENING_OUT_OF_BOUNDS: "That opening does not fit on the selected wall.",
     OPENINGS_OVERLAP: "That opening overlaps another opening on the same wall.",
     DIMENSION_MUST_BE_INTEGER_MM: "Enter whole millimetres only.",
@@ -21,13 +22,58 @@ const explainError = (code: string): string => {
   return copy[code] ?? `The design change was rejected (${code}).`;
 };
 
-function initialize(repository: LocalDesignRepository): DesignSnapshot {
-  return repository.load() ?? newDesign();
-}
-
 export function RoomEditor() {
   const repository = useMemo(() => new LocalDesignRepository(), []);
-  const initial = useMemo(() => initialize(repository), [repository]);
+  const [loadResult] = useState(() => repository.load());
+  const [snapshot, setSnapshot] = useState<DesignSnapshot | null>(loadResult.status === "valid" ? loadResult.snapshot : null);
+  const [recoveryCleared, setRecoveryCleared] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+  if (loadResult.status === "invalid" && !recoveryCleared) {
+    return <main className="setup-shell"><section className="setup-card"><p className="eyebrow">SAVED DESIGN RECOVERY</p><h1>Saved design needs attention</h1>
+      <p>The saved data is unreadable or uses a format this editor cannot open. It has not been replaced.</p>
+      {recoveryError && <p role="alert">{recoveryError}</p>}
+      <button className="button button-primary" onClick={() => {
+        try { repository.backupUnreadable(loadResult.raw); setRecoveryCleared(true); }
+        catch { setRecoveryError("Could not back up the unreadable design. Free browser storage and try again."); }
+      }}>Back up saved data and start a new design</button>
+    </section></main>;
+  }
+  if (!snapshot) return <NewDesignForm
+    notice={loadResult.status === "unavailable" ? "Browser storage is unavailable. You can create a design, but it cannot be saved in this browser." : undefined}
+    onCreate={(room) => setSnapshot(newDesign(room))}
+  />;
+  return <DesignWorkspace key={snapshot.designId} initial={snapshot} repository={repository} onNewDesign={(room) => setSnapshot(newDesign(room))} />;
+}
+
+function NewDesignForm({ onCreate, notice }: { onCreate: (room: Room) => void; notice?: string }) {
+  const [error, setError] = useState("");
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const room: Room = {
+      shape: "rectangle",
+      widthMm: Number(data.get("widthMm")),
+      depthMm: Number(data.get("depthMm")),
+      wallHeightMm: Number(data.get("wallHeightMm")),
+      openings: [],
+    };
+    if (Object.values(room).some((value) => typeof value === "number" && (!Number.isInteger(value) || value <= 0))) {
+      setError("Enter positive whole millimetre measurements for all room dimensions.");
+      return;
+    }
+    onCreate(room);
+  };
+  return <main className="setup-shell"><form className="setup-card" onSubmit={submit}>
+    <p className="eyebrow">NEW BATHROOM DESIGN</p><h1>Measure your room</h1><p>Enter the room dimensions before adding openings and fixtures.</p>
+    {notice && <p role="status">{notice}</p>}
+    <label>Room width (mm)<input name="widthMm" type="number" min="1" step="1" required /></label>
+    <label>Room depth (mm)<input name="depthMm" type="number" min="1" step="1" required /></label>
+    <label>Wall height (mm)<input name="wallHeightMm" type="number" min="1" step="1" required /></label>
+    {error && <p role="alert">{error}</p>}<button className="button button-primary" type="submit">Create design</button>
+  </form></main>;
+}
+
+function DesignWorkspace({ initial, repository, onNewDesign }: { initial: DesignSnapshot; repository: LocalDesignRepository; onNewDesign: (room: Room) => void }) {
   const sessionRef = useRef<DesignSession | null>(null);
   if (!sessionRef.current) sessionRef.current = new DesignSession(initial);
   const [snapshot, setSnapshot] = useState(initial);
@@ -35,7 +81,11 @@ export function RoomEditor() {
   const [status, setStatus] = useState("Design ready. Measurements are in millimetres.");
   const [error, setError] = useState("");
   const [positionDraft, setPositionDraft] = useState({ xMm: 0, yMm: 0 });
+  const [openingKind, setOpeningKind] = useState<Opening["kind"] | "">("");
+  const [openingError, setOpeningError] = useState("");
+  const [fixtureError, setFixtureError] = useState("");
   const selectedPlacement = snapshot.placements.find((item) => item.placementId === selectedPlacementId) ?? null;
+  const warnings = analyzeClearances(snapshot);
 
   useEffect(() => {
     try {
@@ -62,27 +112,60 @@ export function RoomEditor() {
     return true;
   };
 
-  const addOpening = (kind: Opening["kind"]) => {
-    const widthMm = kind === "door" ? 800 : 900;
-    const opening: Opening = kind === "door"
-      ? { openingId: crypto.randomUUID(), kind, wall: "south", offsetMm: 100, widthMm, heightMm: 2000, swing: "inward-left" }
-      : { openingId: crypto.randomUUID(), kind, wall: "north", offsetMm: 400, widthMm, heightMm: 900, sillHeightMm: 900 };
-    dispatch({ type: "upsert-opening", opening });
+  const submitOpening = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const kind = String(data.get("kind")) as Opening["kind"];
+    const opening: Opening = {
+      openingId: crypto.randomUUID(),
+      kind,
+      wall: String(data.get("wall")) as WallId,
+      offsetMm: Number(data.get("offsetMm")),
+      widthMm: Number(data.get("widthMm")),
+      heightMm: Number(data.get("heightMm")),
+      ...(kind === "window" ? { sillHeightMm: Number(data.get("sillHeightMm")) } : { swing: String(data.get("swing")) as Opening["swing"] }),
+    };
+    if (dispatch({ type: "upsert-opening", opening })) {
+      setOpeningError("");
+      event.currentTarget.reset();
+      setOpeningKind("");
+    } else setOpeningError("Check the opening measurements, wall fit, and overlap warnings above.");
   };
 
-  const addFixture = (kind: "vanity" | "shower") => {
-    const shower = kind === "shower";
+  const submitFixture = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const clearanceWidth = data.get("clearanceWidthMm");
+    const clearanceDepth = data.get("clearanceDepthMm");
+    const clearanceDirection = data.get("clearanceDirection");
+    const anyClearanceField = Boolean(clearanceWidth || clearanceDepth || clearanceDirection);
+    if (anyClearanceField && (!clearanceWidth || !clearanceDepth || !clearanceDirection)) {
+      setFixtureError("To define a clearance zone, enter its width, depth, and direction.");
+      return;
+    }
     const placement: ProductPlacement = {
       placementId: crypto.randomUUID(),
-      productId: shower ? "shower-proxy-v1" : "vanity-proxy-v1",
-      productVersion: "proxy-v1",
-      xMm: shower ? Math.max(0, snapshot.room.widthMm - 950) : 50,
-      yMm: shower ? Math.max(0, snapshot.room.depthMm - 950) : 50,
-      widthMm: shower ? 900 : 1000,
-      depthMm: shower ? 900 : 500,
-      rotationDeg: 0,
+      productId: `custom-${crypto.randomUUID()}`,
+      displayName: String(data.get("displayName")).trim(),
+      productVersion: "user-defined",
+      xMm: Number(data.get("xMm")),
+      yMm: Number(data.get("yMm")),
+      widthMm: Number(data.get("widthMm")),
+      depthMm: Number(data.get("depthMm")),
+      rotationDeg: Number(data.get("rotationDeg")) as ProductPlacement["rotationDeg"],
+      ...(clearanceWidth && clearanceDepth ? {
+        clearance: {
+          widthMm: Number(clearanceWidth),
+          depthMm: Number(clearanceDepth),
+          direction: String(clearanceDirection) as WallId,
+        },
+      } : {}),
     };
-    if (dispatch({ type: "place-product", placement })) setSelectedPlacementId(placement.placementId);
+    if (dispatch({ type: "place-product", placement })) {
+      setSelectedPlacementId(placement.placementId);
+      setFixtureError("");
+      event.currentTarget.reset();
+    } else setFixtureError("Check the name, dimensions, rotation, position, and available room area.");
   };
 
   const submitRoomDimensions = (event: FormEvent<HTMLFormElement>) => {
@@ -111,21 +194,19 @@ export function RoomEditor() {
 
   const reopen = () => {
     const saved = repository.load();
-    if (!saved) {
-      setError("There is no saved design in this browser yet.");
+    if (saved.status !== "valid") {
+      setError(saved.status === "unavailable" ? "Browser storage is unavailable, so the saved design cannot be reopened." : "There is no readable saved design in this browser.");
       return;
     }
-    sessionRef.current = new DesignSession(saved);
-    setSnapshot(saved);
+    sessionRef.current = new DesignSession(saved.snapshot);
+    setSnapshot(saved.snapshot);
     setSelectedPlacementId(null);
     setError("");
     setStatus("Saved design reopened from this browser.");
   };
 
   const startNew = () => {
-    const fresh = newDesign();
-    sessionRef.current = new DesignSession(fresh);
-    setSnapshot(fresh);
+    onNewDesign({ ...snapshot.room, openings: [] });
     setSelectedPlacementId(null);
     setError("");
     setStatus("New bathroom design started.");
@@ -170,16 +251,28 @@ export function RoomEditor() {
 
           <section className="panel-section">
             <div className="section-heading"><span className="step-number">02</span><h2>Openings</h2></div>
-            <div className="button-row">
-              <button className="button button-outline" onClick={() => addOpening("door")}>＋ Door</button>
-              <button className="button button-outline" onClick={() => addOpening("window")}>＋ Window</button>
-            </div>
+            <form className="editor-form" onSubmit={submitOpening}>
+              <label>Opening type<select name="kind" required value={openingKind} onChange={(event) => setOpeningKind(event.target.value as Opening["kind"] | "")}>
+                <option value="">Choose type</option><option value="door">Door</option><option value="window">Window</option>
+              </select></label>
+              <label>Wall<select name="wall" required defaultValue=""><option value="">Choose wall</option>
+                <option value="south">South</option><option value="east">East</option><option value="north">North</option><option value="west">West</option>
+              </select></label>
+              <label>Offset from wall start (mm)<input name="offsetMm" type="number" min="0" step="1" required /></label>
+              <label>Width along wall (mm)<input name="widthMm" type="number" min="1" step="1" required /></label>
+              <label>Height (mm)<input name="heightMm" type="number" min="1" step="1" required /></label>
+              {openingKind === "window" && <label>Sill height (mm)<input name="sillHeightMm" type="number" min="0" step="1" required /></label>}
+              {openingKind === "door" && <label>Door swing<select name="swing" required defaultValue=""><option value="">Choose swing</option><option value="inward-left">Inward left</option><option value="inward-right">Inward right</option><option value="none">No swing shown</option></select></label>}
+              <button className="button button-outline" type="submit">Add opening</button>
+              {openingError && <p className="form-error" role="alert">{openingError}</p>}
+            </form>
+            <p className="helper-copy">Wall offset begins at the inside start corner defined by the room plan.</p>
             {snapshot.room.openings.length > 0 ? (
               <ul className="item-list" aria-label="Room openings">
                 {snapshot.room.openings.map((opening) => (
                   <li key={opening.openingId}>
                     <span className={`item-indicator ${opening.kind}`} />
-                    <span>{opening.kind === "door" ? "Door" : "Window"}<small>{opening.wall} wall · {opening.widthMm} mm</small></span>
+                    <span>{opening.kind === "door" ? "Door" : "Window"}<small>{opening.wall} wall · offset {opening.offsetMm} mm · {opening.widthMm} × {opening.heightMm} mm</small></span>
                     <button className="icon-button" aria-label={`Remove ${opening.kind}`} onClick={() => removeOpening(opening)}>×</button>
                   </li>
                 ))}
@@ -189,28 +282,38 @@ export function RoomEditor() {
 
           <section className="panel-section">
             <div className="section-heading"><span className="step-number">03</span><h2>Fixtures</h2></div>
-            <div className="catalogue-list">
-              <button className="catalogue-card vanity-card" onClick={() => addFixture("vanity")}>
-                <span className="catalogue-icon vanity-icon" aria-hidden="true">▱</span>
-                <span><strong>Vanity</strong><small>1000 × 500 mm</small></span><span className="add-mark">＋</span>
-              </button>
-              <button className="catalogue-card shower-card" onClick={() => addFixture("shower")}>
-                <span className="catalogue-icon shower-icon" aria-hidden="true">▦</span>
-                <span><strong>Shower</strong><small>900 × 900 mm</small></span><span className="add-mark">＋</span>
-              </button>
-            </div>
-            <p className="helper-copy">Simple, dimensionally accurate proxies for this first slice.</p>
+            <form className="editor-form" onSubmit={submitFixture}>
+              <label>Fixture name<input name="displayName" type="text" maxLength={128} required /></label>
+              <label>Width (mm)<input name="widthMm" type="number" min="1" step="1" required /></label>
+              <label>Depth (mm)<input name="depthMm" type="number" min="1" step="1" required /></label>
+              <label>X position (mm)<input name="xMm" type="number" step="1" required /></label>
+              <label>Y position (mm)<input name="yMm" type="number" step="1" required /></label>
+              <label>Rotation<select name="rotationDeg" required defaultValue=""><option value="">Choose rotation</option><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+              <fieldset><legend>Optional clearance zone</legend>
+                <label>Zone width (mm)<input name="clearanceWidthMm" type="number" min="1" step="1" /></label>
+                <label>Zone depth (mm)<input name="clearanceDepthMm" type="number" min="1" step="1" /></label>
+                <label>Zone direction<select name="clearanceDirection" defaultValue=""><option value="">Choose direction</option><option value="south">South</option><option value="east">East</option><option value="north">North</option><option value="west">West</option></select></label>
+              </fieldset>
+              <p className="helper-copy">Enter a required clear area to receive warnings. The planner does not assume regulatory clearances.</p>
+              {fixtureError && <p className="form-error" role="alert">{fixtureError}</p>}
+              <button className="button button-outline" type="submit">Add fixture</button>
+            </form>
             <ul className="item-list fixture-list" aria-label="Placed fixtures">
               {snapshot.placements.map((item) => {
-                const label = item.productId.includes("shower") ? "Shower" : "Vanity";
+                const label = item.displayName ?? item.productId;
                 return <li key={item.placementId}>
-                  <span className={`item-indicator ${label === "Shower" ? "window" : "door"}`} />
+                  <span className="item-indicator fixture-indicator" />
                   <button className="fixture-select" aria-pressed={selectedPlacementId === item.placementId} onClick={() => setSelectedPlacementId(item.placementId)}>
-                    {label}<small>{item.xMm}, {item.yMm} mm · {item.rotationDeg}°</small>
+                    {label}<small>{item.widthMm} × {item.depthMm} mm · {item.xMm}, {item.yMm} mm · {item.rotationDeg}°</small>
                   </button>
                 </li>;
               })}
             </ul>
+            {warnings.length > 0 && <div className="warning-panel" role="status"><strong>Clearance warnings</strong><ul>{warnings.map((warning, index) => {
+              const subject = snapshot.placements.find((item) => item.placementId === warning.placementId)?.displayName ?? "Fixture";
+              const related = snapshot.placements.find((item) => item.placementId === warning.relatedPlacementId)?.displayName;
+              return <li key={`${warning.code}-${warning.placementId}-${index}`}>{subject}: {warning.code === "CLEARANCE_OUT_OF_ROOM" ? "clearance zone extends beyond the room." : `clearance zone intersects ${related ?? "another fixture"}.`}</li>;
+            })}</ul></div>}
           </section>
 
           {selectedPlacement && <section className="panel-section selected-section">

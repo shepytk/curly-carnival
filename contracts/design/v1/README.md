@@ -23,7 +23,7 @@ The JSON Schemas in this folder define the v1 snapshot and command envelopes. Ke
 }
 ```
 
-The origin and wall offset conventions are defined in [Milestone 0](../../../docs/MILESTONE_0_DOMAIN_CONTRACT.md). Product dimensions are captured in each placement as a versioned footprint so a later catalogue update does not silently change an old project.
+The origin and wall offset conventions are defined in [Milestone 0](../../../docs/MILESTONE_0_DOMAIN_CONTRACT.md). Product dimensions are captured in each placement as a versioned footprint so a later catalogue update does not silently change an old project. Optional clearance zones store user-entered width, depth, and cardinal direction; clearance warnings are advisory and do not claim building-code compliance.
 
 ## Command shape
 

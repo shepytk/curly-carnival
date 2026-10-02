@@ -16,12 +16,20 @@ export interface Opening {
 export interface ProductPlacement {
   placementId: string;
   productId: string;
+  displayName?: string;
   productVersion: string;
   xMm: number;
   yMm: number;
   widthMm: number;
   depthMm: number;
   rotationDeg: RotationDeg;
+  clearance?: ClearanceZone;
+}
+
+export interface ClearanceZone {
+  widthMm: number;
+  depthMm: number;
+  direction: WallId;
 }
 
 export interface Room {
@@ -56,11 +64,18 @@ export type GeometryErrorCode =
   | "OPENINGS_OVERLAP"
   | "PLACEMENT_OUT_OF_BOUNDS"
   | "PLACEMENTS_OVERLAP"
+  | "CLEARANCE_INVALID"
   | "UNSUPPORTED_ROTATION";
 
 export type GeometryResult =
   | { valid: true; effectiveFootprints?: Array<{ widthMm: number; depthMm: number }> }
   | { valid: false; errorCode: GeometryErrorCode };
+
+export interface DesignWarning {
+  code: "CLEARANCE_OUT_OF_ROOM" | "CLEARANCE_BLOCKED";
+  placementId: string;
+  relatedPlacementId?: string;
+}
 
 const wallLength = (wall: WallId, room: GeometryInput["room"]): number =>
   wall === "south" || wall === "north" ? room.widthMm : room.depthMm;
@@ -74,6 +89,39 @@ function overlaps(
 ): boolean {
   return a.xMm < b.xMm + b.widthMm && a.xMm + a.widthMm > b.xMm
     && a.yMm < b.yMm + b.depthMm && a.yMm + a.depthMm > b.yMm;
+}
+
+export function analyzeClearances(snapshot: Pick<DesignSnapshot, "room" | "placements">): DesignWarning[] {
+  const warnings: DesignWarning[] = [];
+  for (const item of snapshot.placements) {
+    if (!item.clearance) continue;
+    const size = item.rotationDeg === 90 || item.rotationDeg === 270
+      ? { widthMm: item.depthMm, depthMm: item.widthMm }
+      : { widthMm: item.widthMm, depthMm: item.depthMm };
+    const zone = item.clearance;
+    const centeredX = item.xMm + Math.floor((size.widthMm - zone.widthMm) / 2);
+    const centeredY = item.yMm + Math.floor((size.depthMm - zone.widthMm) / 2);
+    const box = zone.direction === "north"
+      ? { x: centeredX, y: item.yMm + size.depthMm, width: zone.widthMm, depth: zone.depthMm }
+      : zone.direction === "south"
+        ? { x: centeredX, y: item.yMm - zone.depthMm, width: zone.widthMm, depth: zone.depthMm }
+        : zone.direction === "east"
+          ? { x: item.xMm + size.widthMm, y: centeredY, width: zone.depthMm, depth: zone.widthMm }
+          : { x: item.xMm - zone.depthMm, y: centeredY, width: zone.depthMm, depth: zone.widthMm };
+    if (box.x < 0 || box.y < 0 || box.x + box.width > snapshot.room.widthMm || box.y + box.depth > snapshot.room.depthMm) {
+      warnings.push({ code: "CLEARANCE_OUT_OF_ROOM", placementId: item.placementId });
+    }
+    for (const other of snapshot.placements) {
+      if (other.placementId === item.placementId) continue;
+      const otherSize = other.rotationDeg === 90 || other.rotationDeg === 270
+        ? { widthMm: other.depthMm, depthMm: other.widthMm }
+        : { widthMm: other.widthMm, depthMm: other.depthMm };
+      if (overlaps({ xMm: box.x, yMm: box.y, widthMm: box.width, depthMm: box.depth }, { xMm: other.xMm, yMm: other.yMm, widthMm: otherSize.widthMm, depthMm: otherSize.depthMm })) {
+        warnings.push({ code: "CLEARANCE_BLOCKED", placementId: item.placementId, relatedPlacementId: other.placementId });
+      }
+    }
+  }
+  return warnings;
 }
 
 export function validateGeometry(input: GeometryInput): GeometryResult {
@@ -103,7 +151,9 @@ export function validateGeometry(input: GeometryInput): GeometryResult {
 
   const openings = input.openings ?? [];
   for (const opening of openings) {
-    if (!opening.wall || !nonNegative(opening.offsetMm ?? -1) || !positive(opening.widthMm ?? 0)) {
+    if (!("south" === opening.wall || "east" === opening.wall || "north" === opening.wall || "west" === opening.wall)
+      || !(opening.kind === "door" || opening.kind === "window")
+      || !nonNegative(opening.offsetMm ?? -1) || !positive(opening.widthMm ?? 0)) {
       return { valid: false, errorCode: "OPENING_OUT_OF_BOUNDS" };
     }
     if (opening.offsetMm! + opening.widthMm! > wallLength(opening.wall, input.room)) {
@@ -136,6 +186,10 @@ export function validateGeometry(input: GeometryInput): GeometryResult {
     if (!Number.isInteger(item.xMm) || !Number.isInteger(item.yMm)
       || !positive(item.widthMm ?? 0) || !positive(item.depthMm ?? 0)) {
       return { valid: false, errorCode: "PLACEMENT_OUT_OF_BOUNDS" };
+    }
+    if (item.clearance && (!positive(item.clearance.widthMm) || !positive(item.clearance.depthMm)
+      || !["south", "east", "north", "west"].includes(item.clearance.direction))) {
+      return { valid: false, errorCode: "CLEARANCE_INVALID" };
     }
     const quarterTurn = item.rotationDeg === 90 || item.rotationDeg === 270;
     const widthMm = quarterTurn ? item.depthMm! : item.widthMm!;

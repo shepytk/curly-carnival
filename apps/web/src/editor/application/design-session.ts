@@ -20,8 +20,14 @@ export type CommandResult =
   | { ok: true; snapshot: DesignSnapshot }
   | { ok: false; errorCode: GeometryErrorCode | "STALE_REVISION" | "ENTITY_NOT_FOUND" | "DUPLICATE_ID" };
 
+export type DesignLoadResult =
+  | { status: "empty" }
+  | { status: "valid"; snapshot: DesignSnapshot }
+  | { status: "unavailable" }
+  | { status: "invalid"; raw: string; reason: "invalid-json" | "unsupported-or-invalid-design" };
+
 export interface DesignRepository {
-  load(): DesignSnapshot | null;
+  load(): DesignLoadResult;
   save(snapshot: DesignSnapshot): void;
 }
 
@@ -122,13 +128,13 @@ export class DesignSession {
   }
 }
 
-export function newDesign(): DesignSnapshot {
+export function newDesign(room: Room): DesignSnapshot {
   return {
     schemaVersion: 1,
     designId: crypto.randomUUID(),
     revision: 0,
     units: "mm",
-    room: { shape: "rectangle", widthMm: 2400, depthMm: 3000, wallHeightMm: 2400, openings: [] },
+    room,
     placements: [],
   };
 }

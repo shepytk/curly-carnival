@@ -11,20 +11,20 @@ The build order reduces product and technical risk in sequence: validate the roo
 The first pilot should let a user:
 
 - Create a bathroom from measured dimensions and place doors/windows on walls.
-- Add, move, rotate, and remove a small curated set of fixtures with visible dimensions.
+- Add, move, rotate, and remove named fixture footprints with user-entered dimensions.
 - See placement and clearance warnings while editing.
 - Switch between an accurate 2D plan and a clear 3D preview.
 - Try a few finish options and product variants.
 - Save, reopen, and share/export a design for discussion with a renovation professional.
 
-Keep the initial catalogue deliberately small and representative. Use dimensionally correct placeholder models until the editor and product metadata are proven. Defer photorealistic rendering, broad vendor integrations, quoting/pricing engines, billing, company administration, and model training until user feedback justifies them.
+Keep fixture footprints user-defined until real catalogue data is available. Do not bake sample bathroom dimensions, opening placements, or product sizes into the editor. Defer photorealistic rendering, broad vendor integrations, quoting/pricing engines, billing, company administration, and model training until user feedback justifies them.
 
 ## Milestones and exit gates
 
 | Milestone | Build | Exit gate | Work / comments |
 |---|---|---|---|
 | 0. Product and domain decisions | Choose the first target user and pilot journey; test sketches/prototypes with homeowners and bathroom installers; decide supported room outlines, openings, fixture anchors, and first product categories. Define the versioned snapshot/command contract and shared geometry test vectors. | A representative bathroom can be described by the agreed model; the team can state what a useful first design/export looks like; contract rules and vectors are written down and testable. | **In progress.** FastAPI/Pydantic remains the API and authoritative validation boundary. TypeScript owns the React editor and responsive preview checks; the same v1 vectors will verify parity. ADR 0007 and the v1 contract are recorded. User/installer validation and final pilot acceptance criteria remain. |
-| 1. Domain and 2D editor | Scaffold only required packages; implement geometry invariants, room outline, openings, dimensions, product placement, snapping, selection, keyboard alternatives, warnings, undo/redo, and local save/reopen. | A user can create and edit a measured room in 2D; domain tests prove units, bounds, openings, rotations, and placement rules; refreshing the app preserves the design. | **In progress.** Vite/React/Konva editor source, Python authoritative geometry, TypeScript preview validation, schema-checked local storage, command session/history, 10 shared vectors, and a Playwright journey are added. Python and Node domain tests pass. Browser build/journey still needs dependency installation and execution; room workflow and geometry rules need user validation. |
+| 1. Domain and 2D editor | Scaffold only required packages; implement geometry invariants, room outline, user-entered opening measurements, configurable fixture footprints and clearance zones, snapping, selection, keyboard alternatives, warnings, undo/redo, and local save/reopen. | A user can create and edit a measured room in 2D; domain tests prove units, bounds, openings, rotations, and placement rules; refreshing the app preserves the design and configured clearance warnings are visible. | **In progress.** Added a measured-room setup form; editable wall/type/offset/width/height/sill/swing fields for openings; named, user-sized and positioned fixtures; optional user-defined clearance zones with non-blocking warnings; and an explicit backup step before replacing unreadable local data. Python and TypeScript tests cover clearance reports. Browser build/journey still needs dependency installation and execution; user validation remains. |
 | 2. 3D preview | Project the same snapshot into Three.js/React Three Fiber; add camera controls, walls/openings, fixture proxies, materials, picking, and resource cleanup. Replace proxies with a few optimized catalogue models. | Changes made in 2D and 3D resolve to the same canonical placements; representative desktop/browser devices meet agreed interaction and load-time budgets; 2D remains usable when 3D assets fail. | Not started. Depends on the canonical snapshot and 2D domain model. |
 | 3. Persistent projects and pilot readiness | Add FastAPI routes, PostgreSQL persistence, revision-safe saves, authentication, ownership checks, asset storage, project export/read-only sharing, backups, and error reporting. Add the minimum usage-event catalogue and outbox only after its purpose and privacy rules are decided. | Users can safely save/reopen/share across sessions; conflicting edits are detected; unauthorized users cannot read or change another project's data; recovery and upload limits are tested. | Not started. The API and analytics workers use Python; browser behavior remains in TypeScript. |
 | 4. Homeowner and installer pilot | Run the end-to-end workflow with a small group of homeowners and installers; observe where users stall; improve dimensions, placement, product metadata, and export from evidence. Review aggregate usage outcomes and event quality. | Pilot users can complete the target task without developer help; top usability failures are fixed or explicitly deferred; there is evidence about whether homeowners or companies are the primary buyer. | Not started. Pilot participants and recruitment are not yet established. |
@@ -55,7 +55,7 @@ Before inviting pilot users, select a few measurable outcomes, for example: time
 
 - Deliver a thin vertical slice at each milestone rather than building all infrastructure first.
 - Keep 2D geometry and typed design commands authoritative; derive the 3D scene from saved snapshots.
-- Use local persistence and a small seeded catalogue to validate editing before introducing service operations.
+- Use local persistence and user-entered fixture dimensions to validate editing before introducing catalogue or service operations.
 - Build the API as a modular monolith with router, application, domain, and adapter boundaries. Split services only when measured team or operational needs justify it.
 - Start with simple asset models and a fast editor preview. Profile actual browser/device performance before pursuing renderer optimizations or photorealism.
 - Add analytics instrumentation before a broader pilot only when the event schema, collection purpose, access, retention, and user/workspace choices are defined.
@@ -68,7 +68,7 @@ The first coding milestone should be narrow enough to finish end to end:
 
 1. Create a project with one bathroom represented by the agreed room outline.
 2. Add a door and window with explicit wall placement and dimensions.
-3. Place one dimensioned vanity and one shower proxy in 2D.
+3. Place named, user-dimensioned fixture proxies in 2D.
 4. Reject or explain an invalid placement with a domain-level result.
 5. Undo/redo the last committed placement and persist/reopen the snapshot locally.
 6. Add tests for the geometry rules and one browser-level journey.

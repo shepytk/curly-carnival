@@ -7,7 +7,7 @@ This document records the initial pilot assumptions and the boundary that implem
 - **Primary first user:** a homeowner measuring and planning a bathroom.
 - **Early reviewers / pilot partners:** bathroom installers and renovation professionals, who can assess whether the plan communicates dimensions and fixture placement clearly.
 - **Core journey:** enter room measurements → add doors/windows → place a vanity and shower → see fit/clearance feedback → compare a few finishes → review 2D and 3D → save and share/export with an installer.
-- **Initial product set:** vanity and shower with dimensionally correct proxy footprints. Catalogue integration and pricing are out of scope for this contract.
+- **Initial fixture model:** user-named rectangular footprints with dimensions supplied by the user. A seeded catalogue and pricing are out of scope for this contract.
 - **Reviewable first output:** a scaled 2D plan with room dimensions, opening dimensions, fixture footprints and positions, plus a 3D preview derived from the same saved snapshot.
 
 This is the product hypothesis for discovery; homeowner/installer interviews and pilot success measures remain open before Milestone 0 can be closed.
@@ -21,8 +21,8 @@ This is the product hypothesis for discovery; homeowner/installer interviews and
 | Coordinate frame | Origin at the southwest/inside floor corner; `x` increases east and `y` increases north. Room width is the X extent; depth is the Y extent. |
 | Walls | Stable IDs `south`, `east`, `north`, `west`. Opening offset starts at the corresponding wall's inside start corner: south west→east, east south→north, north east→west, west north→south. |
 | Openings | Door or window on exactly one wall; `offsetMm` and `widthMm` must fit the wall. The vertical opening extent (`sillHeightMm + heightMm`; door sill is zero) must fit `wallHeightMm`. Windows carry `sillHeightMm`; doors may carry `swing` (`inward-left`, `inward-right`, or `none`). Openings on a wall cannot overlap. |
-| Product placement | A footprint is a rectangle with stable placement ID, catalogue product/version reference, integer X/Y position, and quarter-turn rotation (`0`, `90`, `180`, `270`). The position denotes the southwest corner of the rotated footprint. |
-| Placement invariants | A product footprint must fit inside the room. Two solid footprints cannot overlap in V1; edge contact is allowed because it has no shared area. Clearance/access-zone analysis is reported separately as warnings and is not implied by footprint validity. |
+| Product placement | A footprint is a rectangle with stable placement ID, user-provided display name, product/version reference, integer X/Y position, and quarter-turn rotation (`0`, `90`, `180`, `270`). The position denotes the southwest corner of the rotated footprint. Dimensions, position and rotation are entered by the user; the editor does not choose fixture presets. |
+| Placement invariants | A product footprint must fit inside the room. Two solid footprints cannot overlap in V1; edge contact is allowed because it has no shared area. A user may provide a rectangular clearance zone (width, depth and direction) attached to a fixture. Zone conflicts with the room boundary or another fixture are warnings and do not alter placement validity. No code-compliance clearance is inferred. |
 | Wall height | One positive `wallHeightMm` applies to all four walls in V1. Ceiling shape and services are deferred. |
 | Persistence | Design snapshots are versioned, immutable values at the application boundary, with a revision for optimistic saves. |
 

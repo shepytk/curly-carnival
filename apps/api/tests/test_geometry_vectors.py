@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from apps.api.app.domain.geometry import validate_geometry
+from apps.api.app.domain.geometry import analyze_clearances, validate_geometry
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -41,6 +41,34 @@ class GeometryContractTests(unittest.TestCase):
             }
         )
         self.assertTrue(result["valid"])
+
+    def test_configured_clearance_conflict_is_a_warning(self) -> None:
+        payload = {
+            "room": {"widthMm": 2400, "depthMm": 3000},
+            "placements": [
+                {"placementId": "vanity", "xMm": 100, "yMm": 100, "widthMm": 1000, "depthMm": 500, "rotationDeg": 0, "clearance": {"widthMm": 1000, "depthMm": 700, "direction": "north"}},
+                {"placementId": "other", "xMm": 100, "yMm": 700, "widthMm": 1000, "depthMm": 400, "rotationDeg": 0},
+            ],
+        }
+        self.assertTrue(validate_geometry(payload)["valid"])
+        self.assertEqual(analyze_clearances(payload), [{"code": "CLEARANCE_BLOCKED", "placementId": "vanity", "relatedPlacementId": "other"}])
+
+    def test_configured_clearance_extending_outside_room_is_a_warning(self) -> None:
+        payload = {
+            "room": {"widthMm": 1000, "depthMm": 1000},
+            "placements": [
+                {"placementId": "sink", "xMm": 0, "yMm": 0, "widthMm": 400, "depthMm": 300, "rotationDeg": 0, "clearance": {"widthMm": 400, "depthMm": 600, "direction": "south"}},
+            ],
+        }
+        self.assertTrue(validate_geometry(payload)["valid"])
+        self.assertEqual(analyze_clearances(payload), [{"code": "CLEARANCE_OUT_OF_ROOM", "placementId": "sink"}])
+
+    def test_invalid_configured_clearance_fails_design_validation(self) -> None:
+        result = validate_geometry({
+            "room": {"widthMm": 2400, "depthMm": 3000},
+            "placements": [{"xMm": 1, "yMm": 1, "widthMm": 10, "depthMm": 10, "rotationDeg": 0, "clearance": {}}],
+        })
+        self.assertEqual(result, {"valid": False, "errorCode": "CLEARANCE_INVALID"})
 
 
 if __name__ == "__main__":

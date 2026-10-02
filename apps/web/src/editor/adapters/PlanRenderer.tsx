@@ -137,7 +137,6 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
             const x = planX + item.xMm * scale;
             const y = planY + (snapshot.room.depthMm - item.yMm - size.depthMm) * scale;
             const selected = selectedPlacementId === item.placementId;
-            const isShower = item.productId.includes("shower");
             return (
               <Fragment key={item.placementId}>
                 <Rect
@@ -145,8 +144,8 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
                   y={y}
                   width={size.widthMm * scale}
                   height={size.depthMm * scale}
-                  fill={isShower ? "#d7e7e6" : "#e5dfd2"}
-                  stroke={selected ? "#cf6a3b" : isShower ? "#508c9b" : "#827862"}
+                  fill="#e5dfd2"
+                  stroke={selected ? "#cf6a3b" : "#827862"}
                   strokeWidth={selected ? 3 : 2}
                   cornerRadius={4}
                   draggable
@@ -159,7 +158,7 @@ export function PlanRenderer({ snapshot, selectedPlacementId, onSelect, onMove }
                   x={x + 6}
                   y={y + 7}
                   width={Math.max(40, size.widthMm * scale - 12)}
-                  text={isShower ? "Shower" : "Vanity"}
+                  text={item.displayName ?? "Fixture"}
                   fontSize={13}
                   fill="#26332e"
                   align="center"

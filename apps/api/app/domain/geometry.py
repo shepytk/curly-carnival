@@ -47,6 +47,9 @@ def validate_geometry(payload: dict[str, Any]) -> dict[str, Any]:
         dimensions.extend(opening[key] for key in ("offsetMm", "widthMm", "heightMm", "sillHeightMm") if key in opening)
     for placement in placements:
         dimensions.extend(placement[key] for key in ("xMm", "yMm", "widthMm", "depthMm") if key in placement)
+        clearance = placement.get("clearance")
+        if clearance:
+            dimensions.extend(clearance[key] for key in ("widthMm", "depthMm") if key in clearance)
     if any(not _is_integer(value) for value in dimensions):
         return {"valid": False, "errorCode": "DIMENSION_MUST_BE_INTEGER_MM"}
     if not _is_positive_mm(room.get("widthMm")) or not _is_positive_mm(room.get("depthMm")):
@@ -58,7 +61,12 @@ def validate_geometry(payload: dict[str, Any]) -> dict[str, Any]:
         wall = opening.get("wall")
         offset = opening.get("offsetMm", -1)
         width = opening.get("widthMm", 0)
-        if wall not in ("south", "east", "north", "west") or not _is_non_negative_mm(offset) or not _is_positive_mm(width):
+        if (
+            wall not in ("south", "east", "north", "west")
+            or opening.get("kind") not in ("door", "window")
+            or not _is_non_negative_mm(offset)
+            or not _is_positive_mm(width)
+        ):
             return {"valid": False, "errorCode": "OPENING_OUT_OF_BOUNDS"}
         if offset + width > _wall_length(wall, room):
             return {"valid": False, "errorCode": "OPENING_OUT_OF_BOUNDS"}
@@ -83,6 +91,13 @@ def validate_geometry(payload: dict[str, Any]) -> dict[str, Any]:
     boxes: list[dict[str, int]] = []
     effective_footprints: list[dict[str, int]] = []
     for item in placements:
+        clearance = item.get("clearance")
+        if clearance is not None and (
+            not _is_positive_mm(clearance.get("widthMm"))
+            or not _is_positive_mm(clearance.get("depthMm"))
+            or clearance.get("direction") not in ("south", "east", "north", "west")
+        ):
+            return {"valid": False, "errorCode": "CLEARANCE_INVALID"}
         rotation = item.get("rotationDeg")
         if rotation not in (0, 90, 180, 270):
             return {"valid": False, "errorCode": "UNSUPPORTED_ROTATION"}
@@ -100,3 +115,51 @@ def validate_geometry(payload: dict[str, Any]) -> dict[str, Any]:
         effective_footprints.append({"widthMm": width, "depthMm": depth})
 
     return {"valid": True, "effectiveFootprints": effective_footprints}
+
+
+def analyze_clearances(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Report user-configured front-zone conflicts without rejecting placement."""
+    room = payload["room"]
+    placements = payload.get("placements", [])
+    warnings: list[dict[str, Any]] = []
+    for item in placements:
+        zone = item.get("clearance")
+        if not zone:
+            continue
+        rotated = item["rotationDeg"] in (90, 270)
+        width = item["depthMm"] if rotated else item["widthMm"]
+        depth = item["widthMm"] if rotated else item["depthMm"]
+        x = item["xMm"]
+        y = item["yMm"]
+        zone_width = zone["widthMm"]
+        zone_depth = zone["depthMm"]
+        centered_x = x + (width - zone_width) // 2
+        centered_y = y + (depth - zone_width) // 2
+        direction = zone["direction"]
+        if direction == "north":
+            box = {"xMm": centered_x, "yMm": y + depth, "widthMm": zone_width, "depthMm": zone_depth}
+        elif direction == "south":
+            box = {"xMm": centered_x, "yMm": y - zone_depth, "widthMm": zone_width, "depthMm": zone_depth}
+        elif direction == "east":
+            box = {"xMm": x + width, "yMm": centered_y, "widthMm": zone_depth, "depthMm": zone_width}
+        else:
+            box = {"xMm": x - zone_depth, "yMm": centered_y, "widthMm": zone_depth, "depthMm": zone_width}
+        if (
+            box["xMm"] < 0 or box["yMm"] < 0
+            or box["xMm"] + box["widthMm"] > room["widthMm"]
+            or box["yMm"] + box["depthMm"] > room["depthMm"]
+        ):
+            warnings.append({"code": "CLEARANCE_OUT_OF_ROOM", "placementId": item["placementId"]})
+        for other in placements:
+            if other["placementId"] == item["placementId"]:
+                continue
+            other_rotated = other["rotationDeg"] in (90, 270)
+            other_width = other["depthMm"] if other_rotated else other["widthMm"]
+            other_depth = other["widthMm"] if other_rotated else other["depthMm"]
+            if _overlaps(box, {"xMm": other["xMm"], "yMm": other["yMm"], "widthMm": other_width, "depthMm": other_depth}):
+                warnings.append({
+                    "code": "CLEARANCE_BLOCKED",
+                    "placementId": item["placementId"],
+                    "relatedPlacementId": other["placementId"],
+                })
+    return warnings

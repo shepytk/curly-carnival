@@ -25,15 +25,15 @@ Milestone 1 has started. The repository now includes the v1 geometry contract, P
 | Persistence | PostgreSQL, SQLAlchemy and Alembic |
 | Analytics and AI jobs | Python for event processing, analytics, evaluation, and data-science integrations |
 | Asset storage | S3-compatible object storage |
-| Testing | Vitest/React Testing Library, pytest, Playwright |
+| Testing | Node test runner for TypeScript domain checks, Python `unittest` for geometry, Playwright for browser journeys |
 
 The rendering libraries are adapters, not the source of truth. The design model uses integer millimetres and plain serializable data. The front end can change rendering libraries without changing the domain model or use cases.
 
 ## Planned first release
 
-1. Create a rectangular bathroom and set dimensions.
-2. Add doors, windows, and basic wall openings.
-3. Place a small initial catalogue of bathroom products.
+1. Create a rectangular bathroom and enter its dimensions.
+2. Add doors and windows by entering their wall, dimensions, offset, sill, and swing.
+3. Add named fixture footprints using user-entered dimensions, positions, and rotation.
 4. Edit dimensions and positions with visible validation.
 5. Switch between 2D plan and 3D preview.
 6. Save and reopen projects.
